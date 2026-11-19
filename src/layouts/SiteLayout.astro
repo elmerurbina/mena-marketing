@@ -1,0 +1,193 @@
+---
+import '../styles/global.css';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import Preloader from '../components/Preloader.astro';
+import WhatsAppButton from '../components/WhatsAppButton.astro';
+import { getSettings } from '../lib/content';
+import type { Settings } from '../lib/types';
+
+interface Props {
+	title?: string;
+	description?: string;
+	image?: string | null;
+	settings?: Settings;
+	noindex?: boolean;
+}
+
+const props = Astro.props;
+const settings = props.settings ?? (await getSettings(Astro.locals.supabase));
+const siteName = settings.name;
+const title = props.title ? `${props.title} · ${siteName}` : `${siteName} — ${settings.tagline}`;
+const description = props.description ?? settings.description;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin).href;
+const ogImage = props.image ?? settings.hero_image ?? new URL('/og-image.svg', Astro.site ?? Astro.url.origin).href;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'ProfessionalService',
+	name: siteName,
+	description: settings.description,
+	url: Astro.site?.href ?? Astro.url.origin,
+	...(settings.email ? { email: settings.email } : {}),
+	...(settings.phone ? { telephone: settings.phone } : {}),
+	...(settings.address ? { address: settings.address } : {}),
+	sameAs: [settings.instagram, settings.facebook, settings.tiktok, settings.linkedin, settings.youtube].filter(Boolean),
+};
+---
+
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={canonical} />
+		{props.noindex && <meta name="robots" content="noindex" />}
+		<meta name="theme-color" content="#07060a" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+		<meta property="og:type" content="website" />
+		<meta property="og:site_name" content={siteName} />
+		<meta property="og:title" content={title} />
+		<meta property="og:description" content={description} />
+		<meta property="og:url" content={canonical} />
+		<meta property="og:image" content={ogImage} />
+		<meta property="og:locale" content="es_ES" />
+		<meta name="twitter:card" content="summary_large_image" />
+		<meta name="twitter:title" content={title} />
+		<meta name="twitter:description" content={description} />
+		<meta name="twitter:image" content={ogImage} />
+
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Manrope:wght@300;400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+
+		<script is:inline>
+			document.documentElement.classList.add('js');
+			if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) document.documentElement.classList.add('no-motion');
+		</script>
+		<script type="application/ld+json" set:html={JSON.stringify(jsonLd)} />
+	</head>
+	<body>
+		<a class="skip-link" href="#main">Saltar al contenido</a>
+		<Preloader />
+		<div class="page-curtain" data-page-curtain aria-hidden="true">
+			<div class="page-curtain-mark"></div>
+		</div>
+		<div class="grain" aria-hidden="true"></div>
+		<div class="cursor" data-cursor-el aria-hidden="true">
+			<div class="cursor-ring"><span class="cursor-label"></span></div>
+			<div class="cursor-dot"></div>
+		</div>
+
+		<Header settings={settings} />
+		<main id="main">
+			<slot />
+		</main>
+		<Footer settings={settings} />
+		<WhatsAppButton settings={settings} />
+
+		<script>
+			import '../scripts/motion';
+		</script>
+	</body>
+</html>
+
+<style is:global>
+	.page-curtain {
+		position: fixed;
+		inset: 0;
+		z-index: 150;
+		pointer-events: none;
+		background: var(--gold-gradient);
+		background-size: 200% 100%;
+		transform: scaleY(0);
+	}
+	.js:not(.no-motion) .page-curtain {
+		transform: scaleY(1);
+		transform-origin: top;
+	}
+	.js:not(.no-motion) [data-hero] {
+		opacity: 0;
+	}
+	.js:not(.no-motion) [data-hero-media] {
+		clip-path: inset(100% 0% 0% 0%);
+	}
+
+	/* Cursor personalizado */
+	.cursor {
+		position: fixed;
+		inset: 0;
+		z-index: 160;
+		pointer-events: none;
+		display: none;
+	}
+	.has-cursor .cursor {
+		display: block;
+	}
+	.cursor-dot,
+	.cursor-ring {
+		position: fixed;
+		top: 0;
+		left: 0;
+		border-radius: 50%;
+		opacity: 0;
+		transition: opacity 0.4s;
+	}
+	.cursor.is-visible .cursor-dot,
+	.cursor.is-visible .cursor-ring {
+		opacity: 1;
+	}
+	.cursor-dot {
+		width: 6px;
+		height: 6px;
+		margin: -3px 0 0 -3px;
+		background: var(--gold);
+	}
+	.cursor-ring {
+		width: 42px;
+		height: 42px;
+		margin: -21px 0 0 -21px;
+		border: 1px solid rgba(214, 178, 94, 0.55);
+		display: grid;
+		place-items: center;
+		transition: width 0.5s var(--ease-lux), height 0.5s var(--ease-lux), margin 0.5s var(--ease-lux), background 0.5s, border-color 0.5s, opacity 0.4s;
+	}
+	.cursor.is-hover .cursor-ring {
+		width: 70px;
+		height: 70px;
+		margin: -35px 0 0 -35px;
+		background: rgba(212, 175, 55, 0.08);
+		border-color: var(--gold);
+	}
+	.cursor.has-label .cursor-ring {
+		width: 104px;
+		height: 104px;
+		margin: -52px 0 0 -52px;
+		background: var(--gold);
+		mix-blend-mode: normal;
+	}
+	.cursor.is-down .cursor-ring {
+		transform: scale(0.85);
+	}
+	.cursor-label {
+		font-size: 0.62rem;
+		font-weight: 600;
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		color: var(--ink);
+		opacity: 0;
+		transition: opacity 0.3s;
+	}
+	.cursor.has-label .cursor-label {
+		opacity: 1;
+	}
+	.cursor.has-label .cursor-dot {
+		opacity: 0;
+	}
+</style>

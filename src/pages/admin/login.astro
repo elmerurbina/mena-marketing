@@ -1,0 +1,177 @@
+---
+import '../../styles/admin.css';
+import LogoMark from '../../components/LogoMark.astro';
+import { EMAIL_RE, field } from '../../lib/utils';
+import { rateLimit } from '../../lib/rate-limit';
+import { isSupabaseConfigured } from '../../lib/supabase';
+
+const sb = Astro.locals.supabase;
+let error = '';
+let email = '';
+
+const reason = Astro.url.searchParams.get('error');
+if (reason === 'unauthorized') error = 'Tu cuenta no tiene acceso autorizado al panel. Solicita acceso al administrador.';
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	email = field(form, 'email', 160).toLowerCase();
+	const password = field(form, 'password', 200);
+	let ip = 'unknown';
+	try {
+		ip = Astro.clientAddress;
+	} catch {}
+
+	if (!sb) error = 'Supabase no está configurado. Revisa el archivo .env.';
+	else if (!rateLimit(`login:${ip}`, 8, 15 * 60 * 1000)) error = 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.';
+	else if (!EMAIL_RE.test(email) || !password) error = 'Ingresa un correo y contraseña válidos.';
+	else {
+		const { data, error: authError } = await sb.auth.signInWithPassword({ email, password });
+		if (authError || !data.user) {
+			error = 'Credenciales incorrectas.';
+		} else {
+			const { data: staff } = await sb.from('admin_users').select('active').eq('user_id', data.user.id).maybeSingle();
+			if (!staff?.active) {
+				await sb.auth.signOut();
+				error = 'Tu cuenta no tiene acceso autorizado al panel. Solicita acceso al administrador.';
+			} else {
+				return Astro.redirect('/admin');
+			}
+		}
+	}
+}
+---
+
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<title>Acceso · Panel MENA</title>
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+	</head>
+	<body class="login-body">
+		<div class="login-bg" aria-hidden="true">
+			<div class="login-orb a"></div>
+			<div class="login-orb b"></div>
+			<div class="login-wire"><LogoMark variant="wire-gold" title="" animated /></div>
+		</div>
+
+		<main class="login-card">
+			<div class="login-mark"><LogoMark variant="gold" title="MENA Marketing" /></div>
+			<h1>Panel <em>administrativo</em></h1>
+			<p class="muted">Acceso exclusivo para personal autorizado de MENA Marketing.</p>
+
+			{!isSupabaseConfigured && <div class="flash flash-info">Configura <code>PUBLIC_SUPABASE_URL</code> y <code>PUBLIC_SUPABASE_ANON_KEY</code> en el archivo <code>.env</code>.</div>}
+			{error && <div class="flash flash-err" role="alert">{error}</div>}
+
+			<form method="post" class="form" autocomplete="on">
+				<div class="f">
+					<label for="email">Correo electrónico</label>
+					<input id="email" name="email" type="email" autocomplete="username" required value={email} />
+				</div>
+				<div class="f">
+					<label for="password">Contraseña</label>
+					<input id="password" name="password" type="password" autocomplete="current-password" required />
+				</div>
+				<button class="btn btn-primary login-btn" type="submit">Ingresar</button>
+			</form>
+			<a href="/" class="back-site">← Volver al sitio</a>
+		</main>
+	</body>
+</html>
+
+<style>
+	.login-body {
+		min-height: 100vh;
+		display: grid;
+		place-items: center;
+		padding: 24px 16px;
+		overflow: hidden;
+	}
+	.login-bg {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+	}
+	.login-orb {
+		position: absolute;
+		border-radius: 50%;
+		filter: blur(90px);
+	}
+	.login-orb.a {
+		width: 60vw;
+		height: 60vw;
+		left: -20vw;
+		top: -25vw;
+		background: radial-gradient(circle, rgba(109, 40, 217, 0.55), transparent 65%);
+		animation: drift 14s ease-in-out infinite alternate;
+	}
+	.login-orb.b {
+		width: 45vw;
+		height: 45vw;
+		right: -15vw;
+		bottom: -20vw;
+		background: radial-gradient(circle, rgba(212, 175, 55, 0.3), transparent 65%);
+		animation: drift 18s ease-in-out infinite alternate-reverse;
+	}
+	.login-wire {
+		position: absolute;
+		right: 6vw;
+		top: 50%;
+		translate: 0 -50%;
+		width: min(42vw, 560px);
+		opacity: 0.12;
+	}
+	@keyframes drift {
+		to { transform: translate(5vw, 4vw) scale(1.1); }
+	}
+	.login-card {
+		position: relative;
+		width: 100%;
+		max-width: 420px;
+		display: grid;
+		gap: 18px;
+		padding: clamp(28px, 5vw, 44px);
+		border-radius: 16px;
+		border: 1px solid var(--line-strong);
+		background: rgba(21, 18, 28, 0.75);
+		backdrop-filter: blur(20px);
+		box-shadow: 0 50px 120px -40px rgba(109, 40, 217, 0.5);
+		animation: rise 1s cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	@keyframes rise {
+		from { opacity: 0; transform: translateY(30px) scale(0.98); }
+		to { opacity: 1; transform: none; }
+	}
+	.login-mark {
+		width: 64px;
+	}
+	.login-card h1 {
+		font-size: 2.3rem;
+	}
+	.login-card h1 em {
+		background: var(--gold-gradient);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+	.login-card p {
+		margin: 0;
+	}
+	.login-btn {
+		min-height: 48px;
+		margin-top: 6px;
+	}
+	.back-site {
+		font-size: 0.82rem;
+		color: var(--muted);
+		text-align: center;
+	}
+	.back-site:hover {
+		color: var(--gold);
+	}
+</style>

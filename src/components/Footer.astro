@@ -1,0 +1,207 @@
+---
+import LogoMark from './LogoMark.astro';
+import Icon from './Icon.astro';
+import type { Settings } from '../lib/types';
+import { socialLinks, whatsappLink } from '../lib/utils';
+
+interface Props {
+	settings: Settings;
+}
+const { settings } = Astro.props;
+const socials = socialLinks(settings);
+const wa = whatsappLink(settings);
+const year = new Date().getFullYear();
+---
+
+<footer class="footer">
+	<div class="footer-glow orb orb--purple" aria-hidden="true"></div>
+	<div class="container">
+		<div class="footer-cta" data-reveal>
+			<p class="eyebrow">¿Listo para destacar?</p>
+			<a href="/contacto" class="footer-big" data-magnetic data-cursor="Hablemos">
+				<span class="display-xl">Hablemos <span class="italic text-gold">de tu marca</span></span>
+				<span class="footer-big-arrow"><Icon name="arrow-up-right" size={42} /></span>
+			</a>
+		</div>
+
+		<hr class="hairline" />
+
+		<div class="footer-grid">
+			<div class="footer-brand">
+				<div class="footer-mark"><LogoMark variant="gold" title="MENA Marketing" /></div>
+				<p class="muted">{settings.description}</p>
+			</div>
+
+			<nav aria-label="Pie de página">
+				<h2 class="footer-title">Explorar</h2>
+				<ul>
+					<li><a href="/nosotros">Nosotros</a></li>
+					<li><a href="/servicios">Servicios</a></li>
+					<li><a href="/portafolio">Portafolio</a></li>
+					<li><a href="/contacto">Contacto</a></li>
+					<li><a href="/privacidad">Política de privacidad</a></li>
+				</ul>
+			</nav>
+
+			<div>
+				<h2 class="footer-title">Contacto</h2>
+				<ul>
+					{settings.email && (<li><a href={`mailto:${settings.email}`}><Icon name="mail" size={16} />{settings.email}</a></li>)}
+					{settings.phone && (<li><a href={`tel:${settings.phone.replace(/\s/g, '')}`}><Icon name="phone" size={16} />{settings.phone}</a></li>)}
+					{wa && (<li><a href={wa} target="_blank" rel="noopener"><Icon name="whatsapp" size={16} />WhatsApp</a></li>)}
+					{settings.address && (<li class="muted"><Icon name="pin" size={16} />{settings.address}</li>)}
+					{!settings.email && !settings.phone && !wa && <li><a href="/contacto">Formulario de contacto</a></li>}
+				</ul>
+			</div>
+
+			{
+				socials.length > 0 && (
+					<div>
+						<h2 class="footer-title">Síguenos</h2>
+						<ul class="socials">
+							{socials.map((s) => (
+								<li>
+									<a href={s.url} target="_blank" rel="noopener" aria-label={s.label} data-magnetic>
+										<Icon name={s.key} size={18} />
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				)
+			}
+		</div>
+
+		<div class="footer-bottom">
+			<span>© {year} {settings.name}. Todos los derechos reservados.</span>
+			<button class="to-top" data-to-top aria-label="Volver arriba">Volver arriba ↑</button>
+		</div>
+	</div>
+</footer>
+
+<style>
+	.footer {
+		position: relative;
+		overflow: hidden;
+		padding-top: clamp(80px, 12vw, 160px);
+		background: linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+		border-top: 1px solid var(--line);
+	}
+	.footer-glow {
+		width: 60vw;
+		height: 60vw;
+		left: -20vw;
+		bottom: -30vw;
+		opacity: 0.35;
+	}
+	.footer-cta {
+		display: grid;
+		gap: 30px;
+		padding-bottom: clamp(60px, 9vw, 120px);
+	}
+	.footer-big {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 24px;
+		flex-wrap: wrap;
+	}
+	.footer-big .display-xl {
+		font-size: clamp(2.8rem, 9vw, 8rem);
+	}
+	.footer-big-arrow {
+		display: grid;
+		place-items: center;
+		width: clamp(72px, 9vw, 130px);
+		aspect-ratio: 1;
+		border: 1px solid var(--line-strong);
+		border-radius: 50%;
+		color: var(--gold);
+		transition: transform 0.8s var(--ease-lux), background 0.6s, color 0.6s;
+	}
+	.footer-big:hover .footer-big-arrow {
+		transform: rotate(45deg);
+		background: var(--gold);
+		color: var(--ink);
+	}
+	.footer-grid {
+		display: grid;
+		gap: 48px;
+		padding-block: 72px;
+		grid-template-columns: 1fr;
+	}
+	@media (min-width: 760px) {
+		.footer-grid {
+			grid-template-columns: 1.5fr 1fr 1fr 1fr;
+		}
+	}
+	.footer-mark {
+		width: 64px;
+		margin-bottom: 22px;
+	}
+	.footer-brand p {
+		max-width: 38ch;
+		font-size: 0.92rem;
+	}
+	.footer-title {
+		font-family: var(--font-sans);
+		font-size: 0.68rem;
+		font-weight: 600;
+		letter-spacing: 0.3em;
+		text-transform: uppercase;
+		color: var(--gold);
+		margin-bottom: 22px;
+	}
+	.footer ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 12px;
+		font-size: 0.95rem;
+	}
+	.footer ul a,
+	.footer ul li {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		color: var(--text-soft);
+		transition: color 0.4s;
+		word-break: break-word;
+	}
+	.footer ul a:hover {
+		color: var(--gold-light);
+	}
+	.socials {
+		grid-auto-flow: column;
+		justify-content: start;
+	}
+	.socials a {
+		display: grid !important;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		border: 1px solid var(--line-strong);
+		border-radius: 50%;
+	}
+	.footer-bottom {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		gap: 16px;
+		padding-block: 28px;
+		border-top: 1px solid var(--line);
+		font-size: 0.78rem;
+		letter-spacing: 0.08em;
+		color: var(--muted);
+	}
+	.to-top {
+		background: none;
+		border: 0;
+		cursor: pointer;
+		color: var(--gold);
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		font-size: 0.7rem;
+	}
+</style>

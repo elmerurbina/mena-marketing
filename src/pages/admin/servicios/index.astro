@@ -1,0 +1,71 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { back, friendlyDbError, removeFromStorage, storagePathFromUrl } from '../../../lib/admin';
+import { field } from '../../../lib/utils';
+import type { Service } from '../../../lib/types';
+
+const sb = Astro.locals.supabase!;
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const id = field(form, 'id', 64);
+	const action = field(form, '_action');
+	if (action === 'toggle') {
+		const { error } = await sb.from('services').update({ active: field(form, 'active') === 'true' }).eq('id', id);
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Estado del servicio actualizado.' });
+	}
+	if (action === 'delete') {
+		const { data } = await sb.from('services').select('image_url').eq('id', id).maybeSingle();
+		const { error } = await sb.from('services').delete().eq('id', id);
+		if (!error) await removeFromStorage(sb, [storagePathFromUrl(data?.image_url)]);
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Servicio eliminado.' });
+	}
+}
+
+const { data } = await sb.from('services').select('*').order('sort_order').order('created_at');
+const services = (data ?? []) as Service[];
+---
+
+<AdminLayout title="Servicios">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Servicios</p>
+			<h1>Servicios</h1>
+			<p>Solo los servicios activos aparecen en el catálogo público.</p>
+		</div>
+		<a href="/admin/servicios/nuevo" class="btn btn-primary">+ Nuevo servicio</a>
+	</div>
+
+	<section class="card">
+		{
+			services.length ? (
+				<div class="table-wrap">
+					<table>
+						<thead><tr><th></th><th>Servicio</th><th>Orden</th><th>Estado</th><th></th></tr></thead>
+						<tbody>
+							{services.map((s) => (
+								<tr>
+									<td>{s.image_url ? <img class="thumb" src={s.image_url} alt="" /> : <span class="thumb-empty">{s.name[0]}</span>}</td>
+									<td><span class="cell-main">{s.name}</span><span class="cell-sub">/servicios/{s.slug}</span></td>
+									<td>{s.sort_order}</td>
+									<td><span class:list={['tag', s.active ? 'tag-on' : 'tag-off']}>{s.active ? 'Activo' : 'Inactivo'}</span></td>
+									<td>
+										<form method="post" class="row-actions">
+											<input type="hidden" name="id" value={s.id} />
+											<input type="hidden" name="active" value={String(!s.active)} />
+											<a class="btn btn-sm" href={`/admin/servicios/${s.id}`}>Editar</a>
+											<button class="btn btn-sm" name="_action" value="toggle">{s.active ? 'Desactivar' : 'Activar'}</button>
+											<button class="btn btn-sm btn-danger" name="_action" value="delete" data-confirm={`¿Eliminar "${s.name}"? Considera desactivarlo en lugar de eliminarlo.`}>Eliminar</button>
+										</form>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<p class="empty">Aún no hay servicios. Crea el primero o ejecuta <code>supabase/seed.sql</code>.</p>
+			)
+		}
+	</section>
+</AdminLayout>

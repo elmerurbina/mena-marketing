@@ -1,0 +1,116 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { back, friendlyDbError, getFile, removeFromStorage, storagePathFromUrl, uploadImage } from '../../../lib/admin';
+import { bool, field, int, slugify } from '../../../lib/utils';
+import type { Service } from '../../../lib/types';
+
+const sb = Astro.locals.supabase!;
+const id = Astro.params.id!;
+const isNew = id === 'nuevo';
+
+let service: Partial<Service> = { name: '', slug: '', summary: '', description: '', features: [], sort_order: 0, active: true, image_url: null };
+if (!isNew) {
+	const { data } = await sb.from('services').select('*').eq('id', id).maybeSingle();
+	if (!data) return Astro.redirect('/admin/servicios?err=El servicio no existe.');
+	service = data as Service;
+}
+
+let error = '';
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const name = field(form, 'name', 120);
+	const payload = {
+		name,
+		slug: slugify(field(form, 'slug', 80) || name),
+		summary: field(form, 'summary', 300),
+		description: field(form, 'description', 5000),
+		features: field(form, 'features', 2000).split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 12),
+		sort_order: int(form, 'sort_order'),
+		active: bool(form, 'active'),
+		image_url: service.image_url ?? null,
+	};
+	service = { ...service, ...payload };
+
+	if (name.length < 2) error = 'El nombre es obligatorio.';
+	else if (!payload.slug) error = 'El slug no es válido.';
+	else if (!payload.summary) error = 'Escribe un resumen breve del servicio.';
+
+	const oldImage = service.image_url;
+	if (!error && bool(form, 'remove_image')) payload.image_url = null;
+	const file = getFile(form, 'image');
+	if (!error && file) {
+		const up = await uploadImage(sb, file, 'services');
+		if ('error' in up) error = up.error ?? 'Error al subir la imagen.';
+		else payload.image_url = up.url;
+	}
+
+	if (!error) {
+		const res = isNew ? await sb.from('services').insert(payload).select('id').single() : await sb.from('services').update(payload).eq('id', id).select('id').single();
+		if (res.error) error = friendlyDbError(res.error);
+		else {
+			if (oldImage && oldImage !== payload.image_url) await removeFromStorage(sb, [storagePathFromUrl(oldImage)]);
+			return back(Astro.url, { ok: isNew ? 'Servicio creado.' : 'Cambios guardados.' }, `/admin/servicios/${res.data.id}`);
+		}
+	}
+}
+---
+
+<AdminLayout title={isNew ? 'Nuevo servicio' : service.name ?? 'Servicio'}>
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / <a href="/admin/servicios">Servicios</a> / {isNew ? 'Nuevo' : 'Editar'}</p>
+			<h1>{isNew ? 'Nuevo servicio' : service.name}</h1>
+		</div>
+		{!isNew && service.active && <a class="btn" href={`/servicios/${service.slug}`} target="_blank" rel="noopener">Ver publicado ↗</a>}
+	</div>
+
+	{error && <div class="flash flash-err" role="alert">⚠ {error}</div>}
+
+	<form method="post" enctype="multipart/form-data" class="split">
+		<section class="card form">
+			<div class="form-grid">
+				<div class="f">
+					<label for="name">Nombre *</label>
+					<input id="name" name="name" type="text" required maxlength="120" value={service.name} data-slug-source="#slug" />
+				</div>
+				<div class="f">
+					<label for="slug">Slug (URL)</label>
+					<input id="slug" name="slug" type="text" maxlength="80" value={service.slug} pattern="[a-z0-9-]+" />
+					<small>Solo minúsculas, números y guiones.</small>
+				</div>
+				<div class="f span-2">
+					<label for="summary">Resumen *</label>
+					<input id="summary" name="summary" type="text" required maxlength="300" value={service.summary} />
+					<small>Se muestra en las tarjetas del catálogo y en la página de inicio.</small>
+				</div>
+				<div class="f span-2">
+					<label for="description">Descripción completa</label>
+					<textarea id="description" name="description" rows="7">{service.description}</textarea>
+				</div>
+				<div class="f span-2">
+					<label for="features">Características (una por línea)</label>
+					<textarea id="features" name="features" rows="5">{(service.features ?? []).join('\n')}</textarea>
+				</div>
+			</div>
+		</section>
+
+		<section class="card form">
+			<div class="f">
+				<span class="f-label">Imagen</span>
+				{service.image_url && <img class="preview-img" src={service.image_url} alt="" />}
+				<input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/avif" data-optimize />
+				<small data-optimize-note>JPG, PNG, WebP o AVIF · máx. 8 MB. Se optimiza automáticamente a WebP.</small>
+				{service.image_url && <label class="check"><input type="checkbox" name="remove_image" /> Quitar imagen actual</label>}
+			</div>
+			<div class="f">
+				<label for="sort_order">Orden</label>
+				<input id="sort_order" name="sort_order" type="number" value={service.sort_order} />
+			</div>
+			<label class="check"><input type="checkbox" name="active" checked={service.active} /> Publicado (visible en el sitio)</label>
+			<div class="form-actions">
+				<button class="btn btn-primary" type="submit">{isNew ? 'Crear servicio' : 'Guardar cambios'}</button>
+				<a class="btn btn-ghost" href="/admin/servicios">Cancelar</a>
+			</div>
+		</section>
+	</form>
+</AdminLayout>

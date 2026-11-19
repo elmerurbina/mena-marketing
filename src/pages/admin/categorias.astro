@@ -1,0 +1,124 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { back, friendlyDbError } from '../../lib/admin';
+import { bool, field, int, slugify } from '../../lib/utils';
+import type { Category } from '../../lib/types';
+
+const sb = Astro.locals.supabase!;
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const action = field(form, '_action');
+	const id = field(form, 'id', 64);
+
+	if (action === 'delete') {
+		const { error } = await sb.from('categories').delete().eq('id', id);
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Categoría eliminada. Sus proyectos quedaron sin categoría.' });
+	}
+
+	const name = field(form, 'name', 80);
+	if (name.length < 2) return back(Astro.url, { err: 'El nombre de la categoría es obligatorio.' });
+	const payload = {
+		name,
+		slug: slugify(field(form, 'slug', 80) || name),
+		description: field(form, 'description', 400) || null,
+		sort_order: int(form, 'sort_order'),
+		active: bool(form, 'active'),
+	};
+	const { error } = action === 'create' ? await sb.from('categories').insert(payload) : await sb.from('categories').update(payload).eq('id', id);
+	return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: action === 'create' ? 'Categoría creada.' : 'Categoría actualizada.' });
+}
+
+const [{ data }, { data: projects }] = await Promise.all([
+	sb.from('categories').select('*').order('sort_order').order('name'),
+	sb.from('projects').select('category_id'),
+]);
+const categories = (data ?? []) as Category[];
+const usage = new Map<string, number>();
+(projects ?? []).forEach((p: { category_id: string | null }) => p.category_id && usage.set(p.category_id, (usage.get(p.category_id) ?? 0) + 1));
+---
+
+<AdminLayout title="Categorías">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Categorías</p>
+			<h1>Categorías del portafolio</h1>
+			<p>Organizan los proyectos y permiten filtrarlos en el sitio público.</p>
+		</div>
+	</div>
+
+	<div class="split">
+		<section class="card">
+			<h2 class="card-title">Categorías existentes</h2>
+			{
+				categories.length ? (
+					<div class="table-wrap">
+						<table>
+							<tbody>
+								{categories.map((c) => (
+									<tr>
+										<td colspan="6" style="padding:0">
+											<form method="post" class="cat-row">
+												<input type="hidden" name="id" value={c.id} />
+												<input type="text" name="name" value={c.name} required aria-label="Nombre" />
+												<input type="text" name="slug" value={c.slug} aria-label="Slug" />
+												<input type="number" name="sort_order" value={c.sort_order} aria-label="Orden" />
+												<label class="check"><input type="checkbox" name="active" checked={c.active} /> <span class="sr">Activa</span></label>
+												<span class="muted">{usage.get(c.id) ?? 0}</span>
+												<span class="row-actions">
+													<button class="btn btn-sm" name="_action" value="update">Guardar</button>
+													<button class="btn btn-sm btn-danger" name="_action" value="delete" data-confirm={`¿Eliminar la categoría "${c.name}"?`}>×</button>
+												</span>
+											</form>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<p class="empty">No hay categorías todavía.</p>
+				)
+			}
+		</section>
+
+		<section class="card">
+			<h2 class="card-title">Nueva categoría</h2>
+			<form method="post" class="form">
+				<input type="hidden" name="_action" value="create" />
+				<div class="f"><label for="c-name">Nombre *</label><input id="c-name" name="name" type="text" required maxlength="80" data-slug-source="#c-slug" /></div>
+				<div class="f"><label for="c-slug">Slug</label><input id="c-slug" name="slug" type="text" maxlength="80" /></div>
+				<div class="f"><label for="c-desc">Descripción</label><textarea id="c-desc" name="description" rows="3"></textarea></div>
+				<div class="f"><label for="c-order">Orden</label><input id="c-order" name="sort_order" type="number" value="0" /></div>
+				<label class="check"><input type="checkbox" name="active" checked /> Activa</label>
+				<div class="form-actions"><button class="btn btn-primary">Crear categoría</button></div>
+			</form>
+		</section>
+	</div>
+</AdminLayout>
+
+<style>
+	.cat-row {
+		display: grid;
+		grid-template-columns: 1.4fr 1.2fr 70px 40px 40px auto;
+		gap: 10px;
+		align-items: center;
+		padding: 10px 12px;
+	}
+	.cat-row input[type='text'],
+	.cat-row input[type='number'] {
+		padding: 8px 10px;
+	}
+	.sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+	}
+	@media (max-width: 700px) {
+		.cat-row {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+</style>

@@ -1,0 +1,91 @@
+---
+import LogoMark from './LogoMark.astro';
+---
+
+<div class="preloader" data-preloader aria-hidden="true">
+	<div class="preloader-inner">
+		<div class="preloader-mark"><LogoMark variant="wire-gold" title="" animated /></div>
+		<div class="preloader-word">
+			<span>M</span><span>E</span><span>N</span><span>A</span>
+		</div>
+		<div class="preloader-bar"><span data-preloader-bar></span></div>
+		<div class="preloader-count"><span data-preloader-count>0</span>%</div>
+	</div>
+	<div class="preloader-curtain"></div>
+</div>
+
+<script is:inline>
+	// Solo se muestra la primera vez por sesión
+	try {
+		if (sessionStorage.getItem('mena-loaded')) document.documentElement.classList.add('skip-preloader');
+	} catch (e) {}
+</script>
+
+<style>
+	.preloader {
+		position: fixed;
+		inset: 0;
+		z-index: 200;
+		display: grid;
+		place-items: center;
+		background: var(--ink);
+	}
+	:global(.skip-preloader) .preloader,
+	:global(.no-motion) .preloader {
+		display: none;
+	}
+	.preloader-inner {
+		display: grid;
+		justify-items: center;
+		gap: 26px;
+	}
+	.preloader-mark {
+		width: 120px;
+	}
+	.preloader-word {
+		display: flex;
+		gap: 0.5em;
+		font-family: var(--font-display);
+		font-size: 1.6rem;
+		letter-spacing: 0.3em;
+		overflow: hidden;
+	}
+	.preloader-word span {
+		display: inline-block;
+		transform: translateY(110%);
+		animation: rise 1s var(--ease-lux) forwards;
+	}
+	.preloader-word span:nth-child(2) { animation-delay: 0.08s; }
+	.preloader-word span:nth-child(3) { animation-delay: 0.16s; }
+	.preloader-word span:nth-child(4) { animation-delay: 0.24s; }
+	.preloader-bar {
+		width: 180px;
+		height: 1px;
+		background: var(--line);
+		overflow: hidden;
+	}
+	.preloader-bar span {
+		display: block;
+		height: 100%;
+		width: 100%;
+		background: var(--gold-gradient);
+		transform: scaleX(0);
+		transform-origin: left;
+	}
+	.preloader-count {
+		font-size: 0.7rem;
+		letter-spacing: 0.3em;
+		color: var(--muted);
+	}
+	.preloader-curtain {
+		position: absolute;
+		inset: 0;
+		background: var(--gold-gradient);
+		transform: scaleY(0);
+		transform-origin: bottom;
+		pointer-events: none;
+	}
+	@keyframes rise {
+		to { transform: translateY(0); }
+	}
+</style>

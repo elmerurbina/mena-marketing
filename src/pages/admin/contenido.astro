@@ -1,0 +1,107 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { back, friendlyDbError } from '../../lib/admin';
+import { bool, field, int } from '../../lib/utils';
+import type { Institutional } from '../../lib/types';
+
+const sb = Astro.locals.supabase!;
+const kinds: Record<string, string> = {
+	about: 'Quiénes somos',
+	philosophy: 'Filosofía de trabajo',
+	purpose: 'Propósito',
+	history: 'Historia',
+	mission: 'Misión',
+	vision: 'Visión',
+	values: 'Valores',
+	other: 'Otro',
+};
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const action = field(form, '_action');
+	const id = field(form, 'id', 64);
+	if (action === 'delete') {
+		const { error } = await sb.from('institutional_content').delete().eq('id', id);
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Bloque eliminado.' });
+	}
+	const payload = {
+		kind: field(form, 'kind', 40) in kinds ? field(form, 'kind', 40) : 'other',
+		title: field(form, 'title', 160),
+		body: field(form, 'body', 6000),
+		sort_order: int(form, 'sort_order'),
+		published: bool(form, 'published'),
+	};
+	if (!payload.title || !payload.body) return back(Astro.url, { err: 'El título y el texto son obligatorios.' });
+	const { error } = action === 'create' ? await sb.from('institutional_content').insert(payload) : await sb.from('institutional_content').update(payload).eq('id', id);
+	return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: action === 'create' ? 'Bloque creado.' : 'Contenido actualizado.' });
+}
+
+const { data } = await sb.from('institutional_content').select('*').order('sort_order');
+const blocks = (data ?? []) as Institutional[];
+---
+
+<AdminLayout title="Información institucional">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Información institucional</p>
+			<h1>Información institucional</h1>
+			<p>Contenido de la página "Nosotros". El primer bloque publicado se muestra como texto principal.</p>
+		</div>
+	</div>
+
+	<div class="flash flash-info">Publica únicamente declaraciones institucionales aprobadas por la empresa (misión, visión, valores, etc.).</div>
+
+	{
+		blocks.map((b) => (
+			<section class="card">
+				<form method="post" class="form">
+					<input type="hidden" name="id" value={b.id} />
+					<div class="form-grid">
+						<div class="f">
+							<label>Tipo</label>
+							<select name="kind">{Object.entries(kinds).map(([k, v]) => (<option value={k} selected={b.kind === k}>{v}</option>))}</select>
+						</div>
+						<div class="f">
+							<label>Título</label>
+							<input type="text" name="title" value={b.title} required maxlength="160" />
+						</div>
+						<div class="f span-2">
+							<label>Texto</label>
+							<textarea name="body" rows="4" required>{b.body}</textarea>
+						</div>
+						<div class="f">
+							<label>Orden</label>
+							<input type="number" name="sort_order" value={b.sort_order} />
+						</div>
+						<div class="f" style="align-content:end">
+							<label class="check"><input type="checkbox" name="published" checked={b.published} /> Publicado</label>
+						</div>
+					</div>
+					<div class="form-actions">
+						<button class="btn btn-primary" name="_action" value="update">Guardar</button>
+						<button class="btn btn-danger" name="_action" value="delete" data-confirm="¿Eliminar este bloque?">Eliminar</button>
+						<span class:list={['tag', b.published ? 'tag-on' : 'tag-off']}>{b.published ? 'Publicado' : 'Oculto'}</span>
+					</div>
+				</form>
+			</section>
+		))
+	}
+
+	<section class="card">
+		<h2 class="card-title">Nuevo bloque</h2>
+		<form method="post" class="form">
+			<input type="hidden" name="_action" value="create" />
+			<div class="form-grid">
+				<div class="f">
+					<label for="n-kind">Tipo</label>
+					<select id="n-kind" name="kind">{Object.entries(kinds).map(([k, v]) => (<option value={k}>{v}</option>))}</select>
+				</div>
+				<div class="f"><label for="n-title">Título</label><input id="n-title" type="text" name="title" required maxlength="160" /></div>
+				<div class="f span-2"><label for="n-body">Texto</label><textarea id="n-body" name="body" rows="4" required></textarea></div>
+				<div class="f"><label for="n-order">Orden</label><input id="n-order" type="number" name="sort_order" value={blocks.length + 1} /></div>
+				<div class="f" style="align-content:end"><label class="check"><input type="checkbox" name="published" /> Publicar</label></div>
+			</div>
+			<div class="form-actions"><button class="btn btn-primary">Crear bloque</button></div>
+		</form>
+	</section>
+</AdminLayout>

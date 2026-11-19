@@ -1,0 +1,91 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { formatDate, statusLabels } from '../../lib/utils';
+import type { ContactRequest } from '../../lib/types';
+
+const sb = Astro.locals.supabase!;
+const staff = Astro.locals.staff!;
+const isAdmin = staff.role === 'admin';
+
+const count = async (table: string, filter?: [string, unknown]) => {
+	let q = sb.from(table).select('id', { count: 'exact', head: true });
+	if (filter) q = q.eq(filter[0], filter[1]);
+	const { count } = await q;
+	return count ?? 0;
+};
+
+const [services, projects, photos, newRequests] = await Promise.all([
+	count('services', ['active', true]),
+	count('projects', ['published', true]),
+	count('photos'),
+	isAdmin ? count('contact_requests', ['status', 'nueva']) : Promise.resolve(0),
+]);
+
+let recent: ContactRequest[] = [];
+if (isAdmin) {
+	const { data } = await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(6);
+	recent = (data ?? []) as ContactRequest[];
+}
+const hour = new Date().getHours();
+const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+---
+
+<AdminLayout title="Resumen">
+	<div class="page-head">
+		<div>
+			<p class="crumbs">Panel</p>
+			<h1>{greeting}{staff.full_name ? `, ${staff.full_name.split(' ')[0]}` : ''}</h1>
+			<p>Este es el estado actual del sitio de MENA Marketing.</p>
+		</div>
+		<a href="/" target="_blank" rel="noopener" class="btn">Ver sitio ↗</a>
+	</div>
+
+	<div class="stats">
+		{isAdmin && (<a href="/admin/solicitudes?estado=nueva" class="stat"><span>Solicitudes nuevas</span><strong>{newRequests}</strong></a>)}
+		<a href="/admin/servicios" class="stat"><span>Servicios activos</span><strong>{services}</strong></a>
+		<a href="/admin/portafolio" class="stat"><span>Proyectos publicados</span><strong>{projects}</strong></a>
+		<a href="/admin/portafolio" class="stat"><span>Fotografías</span><strong>{photos}</strong></a>
+	</div>
+
+	{
+		isAdmin && (
+			<section class="card">
+				<h2 class="card-title">
+					Últimas solicitudes <a href="/admin/solicitudes" class="btn btn-sm">Ver todas</a>
+				</h2>
+				{recent.length ? (
+					<div class="table-wrap">
+						<table>
+							<thead>
+								<tr><th>Cliente</th><th>Servicio</th><th>Recibida</th><th>Estado</th><th></th></tr>
+							</thead>
+							<tbody>
+								{recent.map((r) => (
+									<tr>
+										<td><span class="cell-main">{r.name}</span><span class="cell-sub">{r.email}</span></td>
+										<td>{r.service_name ?? '—'}</td>
+										<td>{formatDate(r.created_at, true)}</td>
+										<td><span class:list={['tag', `tag-${r.status}`]}>{statusLabels[r.status]}</span></td>
+										<td class="row-actions"><a class="btn btn-sm" href={`/admin/solicitudes/${r.id}`}>Abrir</a></td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				) : (
+					<p class="empty">Aún no se han recibido solicitudes.</p>
+				)}
+			</section>
+		)
+	}
+
+	<section class="card">
+		<h2 class="card-title">Accesos rápidos</h2>
+		<div class="row-actions" style="justify-content:flex-start">
+			<a href="/admin/portafolio/nuevo" class="btn btn-primary">+ Nuevo proyecto</a>
+			<a href="/admin/servicios/nuevo" class="btn">+ Nuevo servicio</a>
+			<a href="/admin/ajustes" class="btn">Datos de contacto</a>
+			<a href="/admin/contenido" class="btn">Información institucional</a>
+		</div>
+	</section>
+</AdminLayout>

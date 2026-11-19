@@ -1,0 +1,54 @@
+---
+import LogoMark from './LogoMark.astro';
+
+interface Props {
+	eyebrow: string;
+	title: string;
+	lead?: string;
+}
+const { eyebrow, title, lead } = Astro.props;
+---
+
+<section class="page-hero">
+	<div class="orb orb--purple ph-orb" aria-hidden="true"></div>
+	<div class="ph-mark" aria-hidden="true" data-parallax="0.18"><LogoMark variant="wire-gold" title="" /></div>
+	<div class="container ph-inner">
+		<p class="eyebrow" data-hero>{eyebrow}</p>
+		<h1 class="display-xl" data-split="hero" set:html={title} />
+		{lead && <p class="lead" data-hero>{lead}</p>}
+		<slot />
+	</div>
+	<div class="container"><hr class="hairline" data-line /></div>
+</section>
+
+<style>
+	.page-hero {
+		position: relative;
+		overflow: hidden;
+		padding-top: calc(var(--header-h) + clamp(70px, 12vw, 170px));
+	}
+	.ph-inner {
+		position: relative;
+		display: grid;
+		gap: 32px;
+		padding-bottom: clamp(60px, 9vw, 120px);
+	}
+	.ph-inner :global(h1) {
+		max-width: 14ch;
+	}
+	.ph-orb {
+		width: 55vw;
+		height: 55vw;
+		right: -15vw;
+		top: -20vw;
+		opacity: 0.4;
+	}
+	.ph-mark {
+		position: absolute;
+		right: clamp(-80px, -4vw, 0px);
+		top: 18%;
+		width: clamp(220px, 34vw, 520px);
+		opacity: 0.16;
+		pointer-events: none;
+	}
+</style>

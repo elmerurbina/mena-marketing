@@ -1,0 +1,120 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { back, friendlyDbError } from '../../lib/admin';
+import { field, formatDate } from '../../lib/utils';
+import type { StaffMember } from '../../lib/types';
+
+const me = Astro.locals.staff!;
+if (me.role !== 'admin') return Astro.redirect('/admin?err=Solo los administradores pueden gestionar usuarios.');
+const sb = Astro.locals.supabase!;
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const uid = field(form, 'user_id', 64);
+	if (uid === me.user_id) return back(Astro.url, { err: 'No puedes modificar tu propia cuenta desde aquí.' });
+	const role = field(form, 'role');
+	const update = {
+		full_name: field(form, 'full_name', 120) || null,
+		role: role === 'admin' ? 'admin' : 'editor',
+		active: field(form, 'active') === 'true',
+	};
+	const { error } = await sb.from('admin_users').update(update).eq('user_id', uid);
+	return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Usuario actualizado.' });
+}
+
+const { data } = await sb.from('admin_users').select('*').order('created_at');
+const users = (data ?? []) as StaffMember[];
+---
+
+<AdminLayout title="Usuarios y permisos">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Usuarios</p>
+			<h1>Usuarios y permisos</h1>
+			<p>Personas con acceso autorizado al panel.</p>
+		</div>
+	</div>
+
+	<section class="card">
+		<div class="table-wrap">
+			<table>
+				<tbody>
+					{users.map((u) => {
+						const self = u.user_id === me.user_id;
+						return (
+							<tr>
+								<td colspan="6" style="padding:0">
+									<form method="post" class="user-row">
+										<input type="hidden" name="user_id" value={u.user_id} />
+										<span><span class="cell-main">{u.email ?? u.user_id.slice(0, 8)}</span>{self && <span class="cell-sub">Tú</span>}</span>
+										<input type="text" name="full_name" value={u.full_name ?? ''} placeholder="Nombre" disabled={self} aria-label="Nombre" />
+										<select name="role" disabled={self} aria-label="Rol">
+											<option value="admin" selected={u.role === 'admin'}>Administrador</option>
+											<option value="editor" selected={u.role === 'editor'}>Editor</option>
+										</select>
+										<select name="active" disabled={self} aria-label="Estado">
+											<option value="true" selected={u.active}>Activo</option>
+											<option value="false" selected={!u.active}>Desactivado</option>
+										</select>
+										<span class="muted">{formatDate(u.created_at)}</span>
+										<span class="row-actions">{!self && <button class="btn btn-sm">Guardar</button>}</span>
+									</form>
+								</td>
+							</tr>
+						);
+					})}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<div class="split" style="margin-top:22px">
+		<section class="card">
+			<h2 class="card-title">Permisos por rol</h2>
+			<div class="table-wrap">
+				<table>
+					<thead><tr><th>Operación</th><th>Administrador</th><th>Editor</th></tr></thead>
+					<tbody>
+						<tr><td>Servicios, portafolio, categorías</td><td>✓</td><td>✓</td></tr>
+						<tr><td>Información institucional y de contacto</td><td>✓</td><td>✓</td></tr>
+						<tr><td>Consultar y gestionar solicitudes de clientes</td><td>✓</td><td>—</td></tr>
+						<tr><td>Gestionar usuarios y roles</td><td>✓</td><td>—</td></tr>
+					</tbody>
+				</table>
+			</div>
+			<p class="muted" style="margin-bottom:0">Los permisos se verifican en el servidor de base de datos mediante políticas RLS de Supabase.</p>
+		</section>
+
+		<section class="card">
+			<h2 class="card-title">Dar acceso a una persona nueva</h2>
+			<p class="muted">Por seguridad, las cuentas nuevas solo se autorizan desde Supabase:</p>
+			<ol style="padding-left:18px;line-height:1.8">
+				<li>En <strong>Authentication → Users</strong>, usa <em>Add user</em> (o <em>Invite</em>) con su correo.</li>
+				<li>En <strong>SQL Editor</strong>, ejecuta:</li>
+			</ol>
+			<pre><code>insert into public.admin_users (user_id, email, full_name, role)
+select id, email, 'Nombre Apellido', 'editor'
+from auth.users where email = 'persona@correo.com';</code></pre>
+			<p class="muted" style="margin-bottom:0">Para revocar el acceso, desactiva al usuario aquí o elimina su fila de <code>admin_users</code>.</p>
+		</section>
+	</div>
+</AdminLayout>
+
+<style>
+	.user-row {
+		display: grid;
+		grid-template-columns: 1.4fr 1.2fr 150px 140px 110px auto;
+		gap: 10px;
+		align-items: center;
+		padding: 12px;
+	}
+	.user-row input,
+	.user-row select {
+		padding: 8px 10px;
+	}
+	@media (max-width: 900px) {
+		.user-row {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+</style>

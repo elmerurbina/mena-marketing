@@ -1,0 +1,82 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { back } from '../../../lib/admin';
+import { field, formatDate, statusLabels } from '../../../lib/utils';
+import type { ContactRequest } from '../../../lib/types';
+
+if (Astro.locals.staff?.role !== 'admin') return Astro.redirect('/admin?err=Solo los administradores pueden consultar las solicitudes.');
+
+const sb = Astro.locals.supabase!;
+const id = Astro.params.id!;
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const action = field(form, '_action');
+	if (action === 'delete') {
+		const { error } = await sb.from('contact_requests').delete().eq('id', id);
+		if (error) return back(Astro.url, { err: error.message });
+		return back(Astro.url, { ok: 'Solicitud eliminada.' }, '/admin/solicitudes');
+	}
+	const status = field(form, 'status');
+	if (!(status in statusLabels)) return back(Astro.url, { err: 'Estado no válido.' });
+	const { error } = await sb.from('contact_requests').update({ status, notes: field(form, 'notes', 4000) || null }).eq('id', id);
+	return back(Astro.url, error ? { err: error.message } : { ok: 'Solicitud actualizada.' });
+}
+
+const { data } = await sb.from('contact_requests').select('*').eq('id', id).maybeSingle();
+if (!data) return Astro.redirect('/admin/solicitudes?err=La solicitud no existe.');
+const r = data as ContactRequest;
+const wa = r.phone ? `https://wa.me/${r.phone.replace(/\D/g, '')}` : null;
+---
+
+<AdminLayout title={`Solicitud de ${r.name}`}>
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / <a href="/admin/solicitudes">Solicitudes</a> / Detalle</p>
+			<h1>{r.name}</h1>
+			<p>Recibida el {formatDate(r.created_at, true)}</p>
+		</div>
+		<span class:list={['tag', `tag-${r.status}`]}>{statusLabels[r.status]}</span>
+	</div>
+
+	<div class="split">
+		<section class="card detail">
+			<h2 class="card-title">Información del cliente</h2>
+			<dl>
+				<dt>Nombre</dt><dd>{r.name}</dd>
+				<dt>Correo</dt><dd><a href={`mailto:${r.email}`} class="cell-main">{r.email}</a></dd>
+				<dt>Teléfono</dt><dd>{r.phone ?? '—'}</dd>
+				<dt>Servicio</dt><dd>{r.service_name ?? '—'}</dd>
+				<dt>Consentimiento</dt><dd>{r.consent ? 'Aceptó la política de privacidad' : 'No'}</dd>
+				<dt>Actualizada</dt><dd>{formatDate(r.updated_at, true)}</dd>
+			</dl>
+			<h3 style="margin:26px 0 12px;font-size:1.2rem">Mensaje</h3>
+			<div class="message-box">{r.message}</div>
+			<div class="row-actions" style="justify-content:flex-start;margin-top:18px">
+				<a class="btn" href={`mailto:${r.email}?subject=${encodeURIComponent('MENA Marketing — Tu solicitud')}`}>Responder por correo</a>
+				{wa && <a class="btn" href={wa} target="_blank" rel="noopener">Abrir WhatsApp</a>}
+			</div>
+		</section>
+
+		<section class="card">
+			<h2 class="card-title">Gestión</h2>
+			<form method="post" class="form">
+				<div class="f">
+					<label for="status">Estado</label>
+					<select id="status" name="status">
+						{Object.entries(statusLabels).map(([k, v]) => (<option value={k} selected={r.status === k}>{v}</option>))}
+					</select>
+				</div>
+				<div class="f">
+					<label for="notes">Notas internas</label>
+					<textarea id="notes" name="notes" placeholder="Seguimiento, acuerdos, próximos pasos…">{r.notes ?? ''}</textarea>
+					<small>Solo visibles para administradores.</small>
+				</div>
+				<div class="form-actions">
+					<button class="btn btn-primary" name="_action" value="update">Guardar cambios</button>
+					<button class="btn btn-danger" name="_action" value="delete" data-confirm="¿Eliminar definitivamente esta solicitud? Esta acción no se puede deshacer.">Eliminar</button>
+				</div>
+			</form>
+		</section>
+	</div>
+</AdminLayout>

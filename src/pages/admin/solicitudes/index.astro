@@ -1,0 +1,89 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { formatDate, statusLabels } from '../../../lib/utils';
+import type { ContactRequest, RequestStatus } from '../../../lib/types';
+
+if (Astro.locals.staff?.role !== 'admin') return Astro.redirect('/admin?err=Solo los administradores pueden consultar las solicitudes.');
+
+const sb = Astro.locals.supabase!;
+const estado = Astro.url.searchParams.get('estado') ?? '';
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 80);
+const page = Math.max(1, Number(Astro.url.searchParams.get('p') ?? 1) || 1);
+const PER = 25;
+
+let query = sb.from('contact_requests').select('*', { count: 'exact' }).order('created_at', { ascending: false });
+if (estado in statusLabels) query = query.eq('status', estado);
+if (q) {
+	const safe = q.replace(/[%,()]/g, ' ');
+	query = query.or(`name.ilike.%${safe}%,email.ilike.%${safe}%,message.ilike.%${safe}%`);
+}
+const { data, count, error } = await query.range((page - 1) * PER, page * PER - 1);
+const rows = (data ?? []) as ContactRequest[];
+const pages = Math.max(1, Math.ceil((count ?? 0) / PER));
+const link = (p: number) => {
+	const u = new URL(Astro.url);
+	u.searchParams.set('p', String(p));
+	u.searchParams.delete('ok');
+	return u.pathname + u.search;
+};
+---
+
+<AdminLayout title="Solicitudes">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Solicitudes</p>
+			<h1>Solicitudes recibidas</h1>
+			<p>{count ?? 0} solicitud(es) {estado ? `con estado "${statusLabels[estado as RequestStatus]}"` : 'en total'}.</p>
+		</div>
+	</div>
+
+	<section class="card">
+		<form class="toolbar" method="get">
+			<input type="search" name="q" placeholder="Buscar por nombre, correo o mensaje" value={q} />
+			<select name="estado">
+				<option value="">Todos los estados</option>
+				{Object.entries(statusLabels).map(([k, v]) => (<option value={k} selected={estado === k}>{v}</option>))}
+			</select>
+			<button class="btn" type="submit">Filtrar</button>
+			{(q || estado) && <a class="btn btn-ghost" href="/admin/solicitudes">Limpiar</a>}
+		</form>
+
+		{error && <p class="flash flash-err">{error.message}</p>}
+
+		{
+			rows.length ? (
+				<div class="table-wrap">
+					<table>
+						<thead>
+							<tr><th>Cliente</th><th>Teléfono</th><th>Servicio</th><th>Recibida</th><th>Estado</th><th></th></tr>
+						</thead>
+						<tbody>
+							{rows.map((r) => (
+								<tr>
+									<td><span class="cell-main">{r.name}</span><span class="cell-sub">{r.email}</span></td>
+									<td>{r.phone ?? '—'}</td>
+									<td>{r.service_name ?? '—'}</td>
+									<td>{formatDate(r.created_at, true)}</td>
+									<td><span class:list={['tag', `tag-${r.status}`]}>{statusLabels[r.status]}</span></td>
+									<td class="row-actions"><a class="btn btn-sm" href={`/admin/solicitudes/${r.id}`}>Ver detalle</a></td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<p class="empty">No hay solicitudes que coincidan con el filtro.</p>
+			)
+		}
+
+		{
+			pages > 1 && (
+				<div class="row-actions" style="margin-top:18px">
+					{page > 1 && <a class="btn btn-sm" href={link(page - 1)}>← Anterior</a>}
+					<span class="muted" style="align-self:center">Página {page} de {pages}</span>
+					{page < pages && <a class="btn btn-sm" href={link(page + 1)}>Siguiente →</a>}
+				</div>
+			)
+		}
+	</section>
+</AdminLayout>

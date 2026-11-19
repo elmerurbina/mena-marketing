@@ -1,0 +1,76 @@
+---
+/**
+ * Visual de respaldo elegante cuando aún no hay fotografía cargada.
+ * Compone gradientes de marca con el isotipo en modo "wire".
+ */
+import LogoMark from './LogoMark.astro';
+
+interface Props {
+	seed?: number;
+	label?: string;
+	class?: string;
+}
+const { seed = 0, label, class: className } = Astro.props;
+const palettes = [
+	['#22093f', '#6d28d9', '#d4af37'],
+	['#0d0b12', '#3b1675', '#f7e08a'],
+	['#1a1206', '#9c7a26', '#6d28d9'],
+	['#120a1f', '#7c3aed', '#9c7a26'],
+	['#0b0910', '#4c1d95', '#d4af37'],
+];
+const [a, b, c] = palettes[Math.abs(seed) % palettes.length];
+const angle = (seed * 47) % 360;
+---
+
+<div
+	class:list={['art', className]}
+	style={`--a:${a};--b:${b};--c:${c};--angle:${angle}deg`}
+	role="img"
+	aria-label={label ?? 'Composición visual de MENA Marketing'}
+>
+	<div class="art-mesh"></div>
+	<div class="art-mark">
+		<LogoMark variant={seed % 2 ? 'wire-purple' : 'wire-gold'} title="" />
+	</div>
+	{label && <span class="art-label">{label}</span>}
+</div>
+
+<style>
+	.art {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		min-height: 100%;
+		overflow: hidden;
+		background: var(--a);
+	}
+	.art-mesh {
+		position: absolute;
+		inset: -20%;
+		background:
+			radial-gradient(60% 50% at 20% 25%, color-mix(in srgb, var(--b) 80%, transparent), transparent 70%),
+			radial-gradient(45% 40% at 85% 80%, color-mix(in srgb, var(--c) 55%, transparent), transparent 70%),
+			conic-gradient(from var(--angle) at 60% 40%, var(--a), var(--b), var(--a));
+		filter: blur(30px) saturate(1.1);
+		animation: drift 18s ease-in-out infinite alternate;
+	}
+	.art-mark {
+		position: absolute;
+		inset: 22% 20%;
+		opacity: 0.45;
+		mix-blend-mode: screen;
+	}
+	.art-label {
+		position: absolute;
+		left: 20px;
+		bottom: 18px;
+		font-size: 0.66rem;
+		letter-spacing: 0.3em;
+		text-transform: uppercase;
+		color: rgba(255, 255, 255, 0.7);
+	}
+	@keyframes drift {
+		from { transform: translate3d(-3%, -2%, 0) rotate(0deg) scale(1); }
+		to { transform: translate3d(3%, 2%, 0) rotate(8deg) scale(1.08); }
+	}
+</style>

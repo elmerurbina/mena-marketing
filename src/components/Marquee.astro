@@ -1,0 +1,74 @@
+---
+interface Props {
+	items: string[];
+	reverse?: boolean;
+	outline?: boolean;
+}
+const { items, reverse = false, outline = false } = Astro.props;
+const loop = [...items, ...items];
+---
+
+<div class:list={['marquee', { 'marquee--reverse': reverse, 'marquee--outline': outline }]} aria-hidden="true">
+	<div class="marquee-skew" data-skew>
+		<div class="marquee-track">
+			{
+				[0, 1].map(() => (
+					<div class="marquee-group">
+						{loop.map((item) => (
+							<>
+								<span class="marquee-item">{item}</span>
+								<span class="marquee-star">✦</span>
+							</>
+						))}
+					</div>
+				))
+			}
+		</div>
+	</div>
+</div>
+
+<style>
+	.marquee {
+		overflow: hidden;
+		padding-block: clamp(22px, 3vw, 40px);
+		border-block: 1px solid var(--line);
+		user-select: none;
+	}
+	.marquee-track {
+		display: flex;
+		width: max-content;
+		animation: marquee 42s linear infinite;
+	}
+	.marquee--reverse .marquee-track {
+		animation-direction: reverse;
+	}
+	.marquee:hover .marquee-track {
+		animation-play-state: paused;
+	}
+	.marquee-group {
+		display: flex;
+		align-items: center;
+		flex-shrink: 0;
+	}
+	.marquee-item {
+		font-family: var(--font-display);
+		font-style: italic;
+		font-size: clamp(2.2rem, 6vw, 5.4rem);
+		line-height: 1.1;
+		padding-inline: clamp(18px, 2.4vw, 40px);
+		white-space: nowrap;
+		color: var(--text);
+	}
+	.marquee--outline .marquee-item {
+		color: transparent;
+		-webkit-text-stroke: 1px rgba(214, 178, 94, 0.55);
+	}
+	.marquee-star {
+		color: var(--gold);
+		font-size: clamp(1rem, 2vw, 1.6rem);
+	}
+	@keyframes marquee {
+		from { transform: translateX(0); }
+		to { transform: translateX(-50%); }
+	}
+</style>

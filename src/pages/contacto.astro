@@ -1,0 +1,405 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import Icon from '../components/Icon.astro';
+import { getServices, getSettings } from '../lib/content';
+import { socialLinks, whatsappLink } from '../lib/utils';
+
+const sb = Astro.locals.supabase;
+const [settings, services] = await Promise.all([getSettings(sb), getServices(sb)]);
+const preselect = Astro.url.searchParams.get('servicio');
+const sent = Astro.url.searchParams.get('enviado') === '1';
+const serverError = Astro.url.searchParams.get('error');
+const wa = whatsappLink(settings);
+const socials = socialLinks(settings);
+---
+
+<SiteLayout settings={settings} title="Contacto" description="Solicita información o una cotización a MENA Marketing.">
+	<PageHero
+		eyebrow="Contacto"
+		title={`Empecemos algo <span class="italic text-gold">extraordinario</span>`}
+		lead="Cuéntanos sobre tu marca y lo que necesitas. Te responderemos personalmente."
+	/>
+
+	<section class="section section--tight" id="formulario">
+		<div class="container contact-grid">
+			<aside class="contact-info">
+				{(wa || settings.email || settings.phone || settings.address) && (<div class="info-block" data-reveal>
+					<h2 class="eyebrow">Hablemos directo</h2>
+					{wa && (<a href={wa} target="_blank" rel="noopener" class="wa-card" data-magnetic="0.15">
+						<span class="wa-card-icon"><Icon name="whatsapp" size={26} /></span>
+						<span><strong>WhatsApp</strong><small>Respuesta rápida</small></span>
+						<Icon name="arrow-up-right" size={20} class="wa-card-arrow" />
+					</a>)}
+					<ul class="info-list">
+						{settings.email && (<li><Icon name="mail" size={18} /><a href={`mailto:${settings.email}`}>{settings.email}</a></li>)}
+						{settings.phone && (<li><Icon name="phone" size={18} /><a href={`tel:${settings.phone.replace(/\s/g, '')}`}>{settings.phone}</a></li>)}
+						{settings.address && (<li><Icon name="pin" size={18} /><span>{settings.address}</span></li>)}
+					</ul>
+				</div>)}
+
+				{socials.length > 0 && (
+					<div class="info-block" data-reveal>
+						<h2 class="eyebrow">Redes sociales</h2>
+						<ul class="socials">
+							{socials.map((s) => (<li><a href={s.url} target="_blank" rel="noopener" class="link-underline"><Icon name={s.key} size={16} />{s.label}</a></li>))}
+						</ul>
+					</div>
+				)}
+
+				<p class="note" data-reveal>
+					El envío de una solicitud no representa una contratación ni una confirmación de disponibilidad. Las condiciones comerciales se comunican directamente por {settings.name}.
+				</p>
+			</aside>
+
+			<div class="form-wrap" data-reveal>
+				<form class="contact-form" method="post" action="/api/contact" novalidate data-contact-form hidden={sent}>
+					<div class="form-row">
+						<div class="field">
+							<label for="name">Nombre completo *</label>
+							<input id="name" name="name" type="text" autocomplete="name" required minlength="2" maxlength="120" />
+							<span class="bar"></span>
+							<span class="field-error" data-error-for="name" aria-live="polite"></span>
+						</div>
+						<div class="field">
+							<label for="email">Correo electrónico *</label>
+							<input id="email" name="email" type="email" autocomplete="email" required maxlength="160" />
+							<span class="bar"></span>
+							<span class="field-error" data-error-for="email" aria-live="polite"></span>
+						</div>
+					</div>
+					<div class="form-row">
+						<div class="field">
+							<label for="phone">Teléfono</label>
+							<input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40" />
+							<span class="bar"></span>
+							<span class="field-error" data-error-for="phone" aria-live="polite"></span>
+						</div>
+						<div class="field">
+							<label for="service">Servicio de interés</label>
+							<select id="service" name="service">
+								<option value="">Selecciona una opción</option>
+								{services.map((s) => (<option value={s.id} selected={preselect === s.slug}>{s.name}</option>))}
+								<option value="otro">Otro / no estoy seguro</option>
+							</select>
+							<span class="bar"></span>
+						</div>
+					</div>
+					<div class="field">
+						<label for="message">Cuéntanos sobre tu proyecto *</label>
+						<textarea id="message" name="message" required minlength="10" maxlength="3000" rows="5"></textarea>
+						<span class="bar"></span>
+						<span class="field-error" data-error-for="message" aria-live="polite"></span>
+					</div>
+
+					<div class="hp" aria-hidden="true">
+						<label for="website">No completar</label>
+						<input id="website" name="website" type="text" tabindex="-1" autocomplete="off" />
+					</div>
+					<input type="hidden" name="ts" value={Date.now()} />
+
+					<label class="consent">
+						<input type="checkbox" name="consent" required />
+						<span class="consent-box"><Icon name="check" size={14} /></span>
+						<span>Acepto el tratamiento de mis datos conforme a la <a href="/privacidad" class="consent-link">política de privacidad</a>. *</span>
+					</label>
+					<span class="field-error" data-error-for="consent" aria-live="polite"></span>
+
+					<div class="form-foot">
+						<button type="submit" class="btn btn--gold" data-submit data-magnetic="0.2">
+							<span data-submit-label>Enviar solicitud</span>
+							<Icon name="arrow" size={16} class="btn-arrow" />
+						</button>
+						<p class="form-status" role="status" aria-live="polite" data-status>{serverError}</p>
+					</div>
+				</form>
+
+				<div class="success" data-success hidden={!sent}>
+					<div class="success-icon"><Icon name="check" size={34} /></div>
+					<h2 class="display-md">¡Solicitud <span class="italic text-gold">recibida!</span></h2>
+					<p class="lead">Gracias por escribirnos. Revisaremos tu mensaje y te contactaremos muy pronto.</p>
+					<a href="/" class="link-underline">Volver al inicio <Icon name="arrow" size={14} /></a>
+				</div>
+			</div>
+		</div>
+	</section>
+</SiteLayout>
+
+<script>
+	import gsap from 'gsap';
+
+	const form = document.querySelector<HTMLFormElement>('[data-contact-form]');
+	const success = document.querySelector<HTMLElement>('[data-success]');
+	const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+	function setError(name: string, msg: string) {
+		const el = form?.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
+		if (el) el.textContent = msg;
+		const input = form?.querySelector<HTMLInputElement>(`[name="${name}"]`);
+		input?.closest('.field')?.classList.toggle('has-error', Boolean(msg));
+		input?.setAttribute('aria-invalid', msg ? 'true' : 'false');
+	}
+
+	function validate(fd: FormData) {
+		const errors: Record<string, string> = {};
+		const name = String(fd.get('name') ?? '').trim();
+		const email = String(fd.get('email') ?? '').trim();
+		const phone = String(fd.get('phone') ?? '').trim();
+		const message = String(fd.get('message') ?? '').trim();
+		if (name.length < 2) errors.name = 'Ingresa tu nombre completo.';
+		if (!email) errors.email = 'Ingresa tu correo electrónico.';
+		else if (!EMAIL_RE.test(email)) errors.email = 'El correo electrónico no tiene un formato válido.';
+		if (phone && !/^[+\d][\d\s()-]{6,}$/.test(phone)) errors.phone = 'El número de teléfono no es válido.';
+		if (message.length < 10) errors.message = 'Describe tu solicitud (mínimo 10 caracteres).';
+		if (!fd.get('consent')) errors.consent = 'Debes aceptar la política de privacidad para continuar.';
+		return errors;
+	}
+
+	if (form) {
+		const status = form.querySelector<HTMLElement>('[data-status]')!;
+		const btn = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+		const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
+
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			const fd = new FormData(form);
+			['name', 'email', 'phone', 'message', 'consent'].forEach((n) => setError(n, ''));
+			status.textContent = '';
+			const errors = validate(fd);
+			if (Object.keys(errors).length) {
+				Object.entries(errors).forEach(([k, v]) => setError(k, v));
+				form.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+				gsap.fromTo(form, { x: -8 }, { x: 0, duration: 0.6, ease: 'elastic.out(1, 0.3)' });
+				return;
+			}
+			btn.disabled = true;
+			label.textContent = 'Enviando…';
+			try {
+				const res = await fetch(form.action, { method: 'POST', body: fd, headers: { accept: 'application/json' } });
+				const data = await res.json();
+				if (data.ok) {
+					gsap.to(form, {
+						opacity: 0,
+						y: -20,
+						duration: 0.5,
+						onComplete: () => {
+							form.hidden = true;
+							if (success) {
+								success.hidden = false;
+								gsap.fromTo(success.children, { opacity: 0, y: 30 }, { opacity: 1, y: 0, stagger: 0.1, duration: 1, ease: 'expo.out' });
+							}
+						},
+					});
+				} else {
+					if (data.errors) Object.entries(data.errors as Record<string, string>).forEach(([k, v]) => setError(k, v));
+					status.textContent = data.message;
+				}
+			} catch {
+				status.textContent = 'No pudimos enviar tu solicitud. Revisa tu conexión e intenta nuevamente.';
+			} finally {
+				btn.disabled = false;
+				label.textContent = 'Enviar solicitud';
+			}
+		});
+	}
+</script>
+
+<style>
+	.contact-grid {
+		display: grid;
+		gap: clamp(56px, 7vw, 110px);
+	}
+	@media (min-width: 1000px) {
+		.contact-grid {
+			grid-template-columns: 0.75fr 1.25fr;
+		}
+	}
+	.contact-info {
+		display: grid;
+		gap: 50px;
+		align-content: start;
+	}
+	.info-block {
+		display: grid;
+		gap: 24px;
+	}
+	.wa-card {
+		display: grid;
+		grid-template-columns: auto 1fr auto;
+		align-items: center;
+		gap: 18px;
+		padding: 22px;
+		border: 1px solid var(--line-strong);
+		border-radius: var(--radius);
+		background: linear-gradient(120deg, rgba(212, 175, 55, 0.1), transparent);
+		transition: border-color 0.5s, background 0.5s;
+	}
+	.wa-card:hover {
+		border-color: var(--gold);
+		background: linear-gradient(120deg, rgba(212, 175, 55, 0.2), transparent);
+	}
+	.wa-card-icon {
+		display: grid;
+		place-items: center;
+		width: 54px;
+		height: 54px;
+		border-radius: 50%;
+		background: var(--gold-gradient);
+		color: var(--ink);
+	}
+	.wa-card strong {
+		display: block;
+		font-family: var(--font-display);
+		font-size: 1.5rem;
+		font-weight: 400;
+	}
+	.wa-card small {
+		color: var(--muted);
+		font-size: 0.8rem;
+	}
+	.wa-card :global(.wa-card-arrow) {
+		color: var(--gold);
+		transition: transform 0.6s var(--ease-lux);
+	}
+	.wa-card:hover :global(.wa-card-arrow) {
+		transform: rotate(45deg);
+	}
+	.info-list,
+	.socials {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 16px;
+	}
+	.info-list li {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		color: var(--text-soft);
+		word-break: break-word;
+	}
+	.info-list :global(svg) {
+		color: var(--gold);
+		flex-shrink: 0;
+	}
+	.socials {
+		grid-auto-flow: row;
+	}
+	.note {
+		margin: 0;
+		font-size: 0.82rem;
+		color: var(--muted);
+		padding-left: 18px;
+		border-left: 1px solid var(--line-strong);
+	}
+	.form-wrap {
+		position: relative;
+		padding: clamp(28px, 4.5vw, 64px);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		background: linear-gradient(160deg, var(--surface) 0%, var(--ink-2) 100%);
+		box-shadow: 0 60px 120px -60px rgba(109, 40, 217, 0.45);
+	}
+	.form-wrap::before {
+		content: '';
+		position: absolute;
+		inset: -1px;
+		border-radius: inherit;
+		padding: 1px;
+		background: linear-gradient(140deg, rgba(212, 175, 55, 0.6), transparent 35%, transparent 65%, rgba(109, 40, 217, 0.6));
+		-webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+		-webkit-mask-composite: xor;
+		mask-composite: exclude;
+		pointer-events: none;
+	}
+	.contact-form {
+		display: grid;
+		gap: 30px;
+	}
+	.form-row {
+		display: grid;
+		gap: 30px;
+	}
+	@media (min-width: 700px) {
+		.form-row {
+			grid-template-columns: 1fr 1fr;
+		}
+	}
+	.consent {
+		display: flex;
+		align-items: flex-start;
+		gap: 14px;
+		font-size: 0.9rem;
+		color: var(--text-soft);
+		cursor: pointer;
+	}
+	.consent input {
+		position: absolute;
+		opacity: 0;
+		width: 1px;
+		height: 1px;
+	}
+	.consent-box {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		flex-shrink: 0;
+		margin-top: 2px;
+		border: 1px solid var(--line-strong);
+		border-radius: 3px;
+		color: transparent;
+		transition: background 0.4s, color 0.4s, border-color 0.4s;
+	}
+	.consent input:checked + .consent-box {
+		background: var(--gold);
+		border-color: var(--gold);
+		color: var(--ink);
+	}
+	.consent input:focus-visible + .consent-box {
+		outline: 1px solid var(--gold);
+		outline-offset: 3px;
+	}
+	.consent-link {
+		color: var(--gold);
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.form-foot {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 20px;
+	}
+	.form-status {
+		margin: 0;
+		font-size: 0.9rem;
+		color: #ffb4b4;
+	}
+	.btn[disabled] {
+		opacity: 0.7;
+		pointer-events: none;
+	}
+	.success {
+		display: grid;
+		gap: 22px;
+		justify-items: start;
+		padding: 30px 0;
+	}
+	.contact-form[hidden],
+	.success[hidden] {
+		display: none;
+	}
+	.success-icon {
+		display: grid;
+		place-items: center;
+		width: 80px;
+		height: 80px;
+		border-radius: 50%;
+		background: var(--gold-gradient);
+		color: var(--ink);
+		animation: shimmer 6s linear infinite;
+		background-size: 220% 100%;
+	}
+</style>

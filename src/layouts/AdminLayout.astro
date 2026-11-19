@@ -1,0 +1,175 @@
+---
+import '../styles/admin.css';
+import LogoMark from '../components/LogoMark.astro';
+
+interface Props {
+	title: string;
+}
+const { title } = Astro.props;
+const { staff, supabase } = Astro.locals;
+const isAdmin = staff?.role === 'admin';
+const path = Astro.url.pathname;
+const ok = Astro.url.searchParams.get('ok');
+const err = Astro.url.searchParams.get('err');
+
+let newCount = 0;
+if (isAdmin && supabase) {
+	const { count } = await supabase.from('contact_requests').select('id', { count: 'exact', head: true }).eq('status', 'nueva');
+	newCount = count ?? 0;
+}
+
+const groups = [
+	{
+		label: 'General',
+		items: [{ href: '/admin', label: 'Resumen', exact: true }],
+	},
+	...(isAdmin
+		? [{ label: 'Clientes', items: [{ href: '/admin/solicitudes', label: 'Solicitudes', badge: newCount }] }]
+		: []),
+	{
+		label: 'Contenido',
+		items: [
+			{ href: '/admin/servicios', label: 'Servicios' },
+			{ href: '/admin/portafolio', label: 'Portafolio' },
+			{ href: '/admin/categorias', label: 'Categorías' },
+			{ href: '/admin/contenido', label: 'Información institucional' },
+		],
+	},
+	{
+		label: 'Configuración',
+		items: [
+			{ href: '/admin/ajustes', label: 'Empresa y contacto' },
+			...(isAdmin ? [{ href: '/admin/usuarios', label: 'Usuarios y permisos' }] : []),
+		],
+	},
+];
+const active = (href: string, exact?: boolean) => (exact ? path === href : path === href || path.startsWith(`${href}/`));
+---
+
+<!doctype html>
+<html lang="es">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex, nofollow" />
+		<title>{title} · Panel MENA</title>
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+	</head>
+	<body>
+		<div class="adm-top">
+			<a href="/admin" class="adm-brand"><span class="adm-brand-mark"><LogoMark variant="gold" title="" /></span><strong>MENA</strong></a>
+			<button class="btn btn-sm" data-side-toggle aria-label="Abrir menú">Menú</button>
+		</div>
+		<div class="adm">
+			<aside class="adm-side">
+				<a href="/admin" class="adm-brand">
+					<span class="adm-brand-mark"><LogoMark variant="gold" title="" /></span>
+					<span><strong>MENA</strong><small>Panel</small></span>
+				</a>
+				<nav class="adm-nav" aria-label="Panel administrativo">
+					{
+						groups.map((g) => (
+							<>
+								<p class="adm-nav-label">{g.label}</p>
+								{g.items.map((it) => (
+									<a href={it.href} class:list={{ active: active(it.href, 'exact' in it && it.exact) }}>
+										<span>{it.label}</span>
+										{'badge' in it && it.badge ? <span class="adm-pill">{it.badge}</span> : null}
+									</a>
+								))}
+							</>
+						))
+					}
+					<p class="adm-nav-label">Sitio</p>
+					<a href="/" target="_blank" rel="noopener">Ver sitio público ↗</a>
+				</nav>
+				<div class="adm-user">
+					<div>
+						<strong>{staff?.full_name || 'Usuario'}</strong>
+						<span>{staff?.email}</span>
+					</div>
+					<span class:list={['tag', `tag-${staff?.role}`]}>{staff?.role === 'admin' ? 'Administrador' : 'Editor'}</span>
+					<form method="post" action="/admin/logout">
+						<button class="btn btn-sm" type="submit" style="width:100%">Cerrar sesión</button>
+					</form>
+				</div>
+			</aside>
+
+			<main class="adm-main">
+				{ok && <div class="flash flash-ok" role="status">✓ {ok}</div>}
+				{err && <div class="flash flash-err" role="alert">⚠ {err}</div>}
+				<slot />
+			</main>
+		</div>
+
+		<script>
+			// Menú lateral móvil
+			document.querySelector('[data-side-toggle]')?.addEventListener('click', () => document.body.classList.toggle('side-open'));
+			document.querySelector('.adm-main')?.addEventListener('click', () => document.body.classList.remove('side-open'));
+
+			// Confirmación antes de acciones destructivas
+			document.addEventListener('submit', (e) => {
+				const form = e.target as HTMLFormElement;
+				const msg = (e.submitter as HTMLElement | null)?.dataset.confirm ?? form.dataset.confirm;
+				if (msg && !confirm(msg)) e.preventDefault();
+			});
+
+			// Slug automático
+			document.querySelectorAll<HTMLInputElement>('[data-slug-source]').forEach((src) => {
+				const target = document.querySelector<HTMLInputElement>(src.dataset.slugSource!);
+				if (!target) return;
+				let touched = Boolean(target.value);
+				target.addEventListener('input', () => (touched = true));
+				src.addEventListener('input', () => {
+					if (touched) return;
+					target.value = src.value
+						.normalize('NFD')
+						.replace(/[̀-ͯ]/g, '')
+						.toLowerCase()
+						.replace(/[^a-z0-9]+/g, '-')
+						.replace(/^-+|-+$/g, '');
+				});
+			});
+
+			// Optimización de imágenes en el navegador antes de subir (RNF-024):
+			// redimensiona a máx. 2400 px y convierte a WebP.
+			async function toWebp(file: File, max = 2400, quality = 0.86): Promise<File> {
+				if (!/^image\/(jpeg|png|webp)$/.test(file.type)) return file;
+				try {
+					const bmp = await createImageBitmap(file);
+					const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+					const canvas = document.createElement('canvas');
+					canvas.width = Math.round(bmp.width * scale);
+					canvas.height = Math.round(bmp.height * scale);
+					canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+					const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', quality));
+					if (!blob || blob.size >= file.size) return file;
+					return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
+				} catch {
+					return file;
+				}
+			}
+			document.querySelectorAll<HTMLInputElement>('input[type="file"][data-optimize]').forEach((input) => {
+				input.addEventListener('change', async () => {
+					if (!input.files?.length) return;
+					const note = input.parentElement?.querySelector<HTMLElement>('[data-optimize-note]');
+					if (note) note.textContent = 'Optimizando imágenes…';
+					const dt = new DataTransfer();
+					let before = 0;
+					let after = 0;
+					for (const f of Array.from(input.files)) {
+						const out = await toWebp(f);
+						before += f.size;
+						after += out.size;
+						dt.items.add(out);
+					}
+					input.files = dt.files;
+					if (note) note.textContent = `${dt.files.length} archivo(s) listos · ${(before / 1048576).toFixed(1)} MB → ${(after / 1048576).toFixed(1)} MB`;
+				});
+			});
+		</script>
+	</body>
+</html>

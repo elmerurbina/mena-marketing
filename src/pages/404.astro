@@ -1,0 +1,41 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import LogoMark from '../components/LogoMark.astro';
+Astro.response.status = 404;
+---
+
+<SiteLayout title="Página no encontrada" noindex>
+	<section class="nf">
+		<div class="nf-mark" aria-hidden="true"><LogoMark variant="wire-gold" title="" animated /></div>
+		<div class="container nf-inner">
+			<p class="eyebrow" data-hero>Error 404</p>
+			<h1 class="display-xl" data-split="hero">Esta página <span class="italic text-gold">no existe</span></h1>
+			<p class="lead" data-hero>Es posible que el enlace haya cambiado o que el contenido ya no esté disponible.</p>
+			<div data-hero><a href="/" class="btn btn--gold" data-magnetic>Volver al inicio</a></div>
+		</div>
+	</section>
+</SiteLayout>
+
+<style>
+	.nf {
+		position: relative;
+		min-height: 100svh;
+		display: grid;
+		align-items: center;
+		overflow: hidden;
+		padding-top: var(--header-h);
+	}
+	.nf-inner {
+		display: grid;
+		gap: 28px;
+		position: relative;
+	}
+	.nf-mark {
+		position: absolute;
+		right: -6vw;
+		top: 50%;
+		translate: 0 -50%;
+		width: min(60vw, 640px);
+		opacity: 0.18;
+	}
+</style>

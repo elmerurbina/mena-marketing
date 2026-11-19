@@ -1,0 +1,307 @@
+---
+import LogoMark from './LogoMark.astro';
+import type { Settings } from '../lib/types';
+import { whatsappLink } from '../lib/utils';
+
+interface Props {
+	settings: Settings;
+}
+const { settings } = Astro.props;
+const path = Astro.url.pathname;
+const links = [
+	{ href: '/', label: 'Inicio' },
+	{ href: '/nosotros', label: 'Nosotros' },
+	{ href: '/servicios', label: 'Servicios' },
+	{ href: '/portafolio', label: 'Portafolio' },
+	{ href: '/contacto', label: 'Contacto' },
+];
+const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+const wa = whatsappLink(settings);
+---
+
+<header class="site-header" data-header>
+	<div class="container header-inner">
+		<a href="/" class="brand" aria-label="MENA Marketing — Inicio" data-magnetic>
+			<span class="brand-mark"><LogoMark variant="gold" title="" /></span>
+			<span class="brand-text">
+				<span class="brand-name">MENA</span>
+				<span class="brand-sub">Marketing</span>
+			</span>
+		</a>
+
+		<nav class="nav" aria-label="Navegación principal">
+			<ul>
+				{
+					links.map((l) => (
+						<li>
+							<a href={l.href} class:list={['nav-link', { active: isActive(l.href) }]} aria-current={isActive(l.href) ? 'page' : undefined}>
+								<span class="nav-roll" data-text={l.label}>{l.label}</span>
+							</a>
+						</li>
+					))
+				}
+			</ul>
+		</nav>
+
+		<div class="header-actions">
+			<a href="/contacto" class="btn btn--sm header-cta" data-magnetic>Cotizar</a>
+			<button class="menu-toggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-menu" data-menu-toggle>
+				<span></span><span></span>
+			</button>
+		</div>
+	</div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu" data-mobile-menu aria-hidden="true">
+	<div class="mobile-menu-bg"></div>
+	<div class="container mobile-menu-inner">
+		<nav aria-label="Menú móvil">
+			<ol>
+				{
+					links.map((l, i) => (
+						<li>
+							<a href={l.href} class:list={{ active: isActive(l.href) }} tabindex="-1">
+								<span class="mm-index">0{i + 1}</span>
+								<span class="mm-label">{l.label}</span>
+							</a>
+						</li>
+					))
+				}
+			</ol>
+		</nav>
+		<div class="mobile-menu-foot">
+			{settings.email && <a href={`mailto:${settings.email}`} tabindex="-1">{settings.email}</a>}
+			{wa && <a href={wa} target="_blank" rel="noopener" tabindex="-1">WhatsApp</a>}
+		</div>
+	</div>
+</div>
+
+<style>
+	.site-header {
+		position: fixed;
+		inset: 0 0 auto 0;
+		z-index: 80;
+		height: var(--header-h);
+		display: flex;
+		align-items: center;
+		transition: transform 0.7s var(--ease-lux), background-color 0.6s var(--ease-lux), border-color 0.6s, height 0.6s var(--ease-lux);
+		border-bottom: 1px solid transparent;
+	}
+	.site-header.is-scrolled {
+		height: 70px;
+		background: rgba(7, 6, 10, 0.72);
+		backdrop-filter: blur(18px) saturate(140%);
+		-webkit-backdrop-filter: blur(18px) saturate(140%);
+		border-bottom-color: var(--line);
+	}
+	.site-header.is-hidden {
+		transform: translateY(-110%);
+	}
+	.header-inner {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 24px;
+	}
+	.brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 14px;
+	}
+	.brand-mark {
+		width: 42px;
+		transition: transform 0.8s var(--ease-lux);
+	}
+	.brand:hover .brand-mark {
+		transform: rotate(-8deg) scale(1.06);
+	}
+	.brand-text {
+		display: grid;
+		line-height: 1;
+	}
+	.brand-name {
+		font-family: var(--font-display);
+		font-size: 1.55rem;
+		letter-spacing: 0.24em;
+	}
+	.brand-sub {
+		font-size: 0.56rem;
+		letter-spacing: 0.56em;
+		text-transform: uppercase;
+		color: var(--gold);
+		margin-top: 4px;
+	}
+	.nav ul {
+		display: flex;
+		gap: clamp(20px, 2.6vw, 44px);
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.nav-link {
+		position: relative;
+		display: inline-block;
+		font-size: 0.74rem;
+		font-weight: 500;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--text-soft);
+		overflow: hidden;
+		padding: 6px 0;
+	}
+	.nav-roll {
+		position: relative;
+		display: inline-block;
+		transition: transform 0.6s var(--ease-lux);
+	}
+	.nav-roll::after {
+		content: attr(data-text);
+		position: absolute;
+		left: 0;
+		top: 100%;
+		color: var(--gold);
+	}
+	.nav-link:hover .nav-roll {
+		transform: translateY(-100%);
+	}
+	.nav-link::after {
+		content: '';
+		position: absolute;
+		left: 50%;
+		bottom: 0;
+		width: 4px;
+		height: 4px;
+		border-radius: 50%;
+		background: var(--gold);
+		transform: translateX(-50%) scale(0);
+		transition: transform 0.5s var(--ease-lux);
+	}
+	.nav-link.active {
+		color: var(--text);
+	}
+	.nav-link.active::after {
+		transform: translateX(-50%) scale(1);
+	}
+	.header-actions {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+	.menu-toggle {
+		display: none;
+		position: relative;
+		width: 48px;
+		height: 48px;
+		border: 1px solid var(--line-strong);
+		border-radius: 50%;
+		background: transparent;
+		cursor: pointer;
+		z-index: 95;
+	}
+	.menu-toggle span {
+		position: absolute;
+		left: 14px;
+		right: 14px;
+		height: 1px;
+		background: var(--text);
+		transition: transform 0.6s var(--ease-lux), left 0.6s var(--ease-lux);
+	}
+	.menu-toggle span:first-child { top: 19px; }
+	.menu-toggle span:last-child { top: 27px; left: 20px; }
+	:global(.menu-open) .menu-toggle span:first-child { transform: translateY(4px) rotate(45deg); }
+	:global(.menu-open) .menu-toggle span:last-child { transform: translateY(-4px) rotate(-45deg); left: 14px; }
+
+	.mobile-menu {
+		position: fixed;
+		inset: 0;
+		z-index: 79;
+		pointer-events: none;
+		visibility: hidden;
+	}
+	.mobile-menu-bg {
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(120% 80% at 100% 0%, rgba(109, 40, 217, 0.35), transparent 60%), var(--ink);
+		clip-path: circle(0% at calc(100% - 44px) 42px);
+		transition: clip-path 0.9s var(--ease-in-out);
+	}
+	.mobile-menu-inner {
+		position: relative;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 48px;
+		padding-top: var(--header-h);
+	}
+	.mobile-menu ol {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 6px;
+	}
+	.mobile-menu li {
+		overflow: hidden;
+	}
+	.mobile-menu li a {
+		display: flex;
+		align-items: baseline;
+		gap: 18px;
+		transform: translateY(110%);
+		transition: transform 0.9s var(--ease-lux);
+	}
+	.mm-index {
+		font-size: 0.7rem;
+		color: var(--gold);
+		letter-spacing: 0.2em;
+	}
+	.mm-label {
+		font-family: var(--font-display);
+		font-size: clamp(2.6rem, 11vw, 4.2rem);
+		line-height: 1.1;
+	}
+	.mobile-menu li a.active .mm-label {
+		font-style: italic;
+		color: var(--gold-light);
+	}
+	.mobile-menu-foot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 24px;
+		font-size: 0.8rem;
+		letter-spacing: 0.14em;
+		color: var(--muted);
+		opacity: 0;
+		transition: opacity 0.6s 0.5s;
+	}
+	:global(.menu-open) .mobile-menu {
+		pointer-events: auto;
+		visibility: visible;
+	}
+	:global(.menu-open) .mobile-menu-bg {
+		clip-path: circle(150% at calc(100% - 44px) 42px);
+	}
+	:global(.menu-open) .mobile-menu li a {
+		transform: translateY(0);
+	}
+	:global(.menu-open) .mobile-menu li:nth-child(2) a { transition-delay: 0.08s; }
+	:global(.menu-open) .mobile-menu li:nth-child(3) a { transition-delay: 0.16s; }
+	:global(.menu-open) .mobile-menu li:nth-child(4) a { transition-delay: 0.24s; }
+	:global(.menu-open) .mobile-menu li:nth-child(5) a { transition-delay: 0.32s; }
+	:global(.menu-open) .mobile-menu-foot { opacity: 1; }
+	:global(.menu-open) .site-header { background: transparent; border-color: transparent; backdrop-filter: none; }
+
+	@media (max-width: 960px) {
+		.nav,
+		.header-cta {
+			display: none;
+		}
+		.menu-toggle {
+			display: block;
+		}
+	}
+	@media (max-width: 960px) {
+		:global(.menu-open) .menu-toggle span { background: var(--gold); }
+	}
+</style>

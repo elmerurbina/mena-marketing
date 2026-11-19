@@ -1,0 +1,117 @@
+---
+/**
+ * Isotipo facetado "M" de MENA Marketing (vectorizado a partir de las variantes oficiales).
+ * variant: gold | purple | mono | wire-gold | wire-purple
+ */
+interface Props {
+	variant?: 'gold' | 'purple' | 'mono' | 'wire-gold' | 'wire-purple';
+	class?: string;
+	title?: string;
+	animated?: boolean;
+}
+const { variant = 'gold', class: className = '', title = 'MENA Marketing', animated = false } = Astro.props;
+const uid = `m${Math.random().toString(36).slice(2, 8)}`;
+
+// Vértices del contorno (viewBox 0 0 100 86)
+const P = {
+	A: [3, 16], B: [26, 6], C: [50, 35], D: [72.5, 0.6], E: [97, 6], F: [99, 69.5],
+	G: [77, 84.5], H: [74, 42], I: [50, 66.5], J: [27, 43.5], K: [23, 83], L: [1.5, 69],
+	X: [50, 46], // centro de la banda media
+} as const;
+const pt = (k: keyof typeof P) => P[k].join(',');
+const outline = (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as const).map(pt).join(' ');
+
+// Cortes de las facetas
+const cuts: [number[], number[]][] = [
+	[P.A, P.C], [P.B, [26.6, 25]], [P.A, [20.5, 80]], [P.L, P.J],
+	[P.J, P.X], [P.X, P.H], [P.C, P.X],
+	[P.D, [72.8, 24]], [P.E, P.C], [P.E, P.H], [P.E, [79.5, 82]],
+	[[88, 55], P.F], [[88, 55], [92.5, 76]],
+];
+
+// Nodos para la versión "wire"
+const nodes = [P.A, P.B, P.C, P.D, P.E, P.F, P.G, P.I, P.J, P.K, P.L, P.H, P.X];
+const wireEdges: [number[], number[]][] = [
+	[P.A, P.B], [P.B, P.C], [P.C, P.D], [P.D, P.E], [P.E, P.F], [P.F, P.G], [P.G, P.H], [P.H, P.I],
+	[P.I, P.J], [P.J, P.K], [P.K, P.L], [P.L, P.A], ...cuts.filter(([a, b]) => nodes.includes(a as never) && nodes.includes(b as never)),
+	[P.B, P.J], [P.D, P.H], [P.A, P.K], [P.E, P.G],
+];
+
+const isWire = variant.startsWith('wire');
+const tone = variant.includes('purple') ? 'purple' : variant === 'mono' ? 'mono' : 'gold';
+const stops = {
+	gold: ['#9c7a26', '#f7e08a', '#d4af37', '#8a6a1f'],
+	purple: ['#22093f', '#4c1d95', '#7c3aed', '#c4a1ff'],
+	mono: ['#f3eee4', '#f3eee4', '#cfc8bb', '#a59fae'],
+}[tone];
+---
+
+<svg
+	class:list={['logo-mark', className, { 'logo-mark--animated': animated }]}
+	viewBox="-2 -2 104 90"
+	role="img"
+	aria-label={title}
+	data-variant={variant}
+>
+	<defs>
+		<linearGradient id={`${uid}-g`} x1="0" y1="0" x2="1" y2="0.35">
+			<stop offset="0" stop-color={stops[0]}></stop>
+			<stop offset="0.45" stop-color={stops[1]}></stop>
+			<stop offset="0.7" stop-color={stops[2]}></stop>
+			<stop offset="1" stop-color={stops[3]}></stop>
+		</linearGradient>
+		{
+			!isWire && (
+				<mask id={`${uid}-mask`} maskUnits="userSpaceOnUse" x="-2" y="-2" width="104" height="90">
+					<rect x="-2" y="-2" width="104" height="90" fill="white" />
+					{cuts.map(([a, b]) => (
+						<line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="black" stroke-width="1.5" stroke-linecap="round" />
+					))}
+				</mask>
+			)
+		}
+	</defs>
+
+	{
+		isWire ? (
+			<g class="wire" stroke={`url(#${uid}-g)`} fill="none" stroke-width="1.6" stroke-linecap="round">
+				{wireEdges.map(([a, b]) => (
+					<line class="wire-edge" pathLength="1" x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} />
+				))}
+				{nodes.map((n) => (
+					<circle class="wire-node" cx={n[0]} cy={n[1]} r="2.2" fill={`url(#${uid}-g)`} stroke="none" />
+				))}
+			</g>
+		) : (
+			<polygon class="facets" points={outline} fill={`url(#${uid}-g)`} mask={`url(#${uid}-mask)`} />
+		)
+	}
+</svg>
+
+<style>
+	.logo-mark {
+		width: 100%;
+		height: auto;
+		overflow: visible;
+	}
+	.logo-mark--animated .wire-edge {
+		stroke-dasharray: 1;
+		stroke-dashoffset: 1;
+		animation: draw 2.4s var(--ease-lux) forwards;
+	}
+	.logo-mark--animated .wire-edge:nth-child(3n) { animation-delay: 0.15s; }
+	.logo-mark--animated .wire-edge:nth-child(3n + 1) { animation-delay: 0.35s; }
+	.logo-mark--animated .wire-node {
+		opacity: 0;
+		transform-box: fill-box;
+		transform-origin: center;
+		animation: pop 0.9s var(--ease-lux) forwards 1s;
+	}
+	@keyframes draw {
+		to { stroke-dashoffset: 0; }
+	}
+	@keyframes pop {
+		from { opacity: 0; transform: scale(0); }
+		to { opacity: 1; transform: scale(1); }
+	}
+</style>

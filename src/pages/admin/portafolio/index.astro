@@ -1,0 +1,83 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { back, friendlyDbError, removeFromStorage } from '../../../lib/admin';
+import { field, formatDate } from '../../../lib/utils';
+import type { Project } from '../../../lib/types';
+
+const sb = Astro.locals.supabase!;
+
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const id = field(form, 'id', 64);
+	const action = field(form, '_action');
+	if (action === 'toggle') {
+		const { error } = await sb.from('projects').update({ published: field(form, 'published') === 'true' }).eq('id', id);
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Estado de publicación actualizado.' });
+	}
+	if (action === 'delete') {
+		const { data: photos } = await sb.from('photos').select('storage_path').eq('project_id', id);
+		const { error } = await sb.from('projects').delete().eq('id', id);
+		if (!error) await removeFromStorage(sb, (photos ?? []).map((p) => p.storage_path));
+		return back(Astro.url, error ? { err: friendlyDbError(error) } : { ok: 'Proyecto y fotografías eliminados.' });
+	}
+}
+
+const { data } = await sb
+	.from('projects')
+	.select('*, category:categories(name), photos(id, url, sort_order)')
+	.order('sort_order')
+	.order('created_at', { ascending: false });
+const projects = (data ?? []) as Project[];
+---
+
+<AdminLayout title="Portafolio">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Portafolio</p>
+			<h1>Portafolio</h1>
+			<p>Proyectos y fotografías. Solo los proyectos publicados son visibles en el sitio.</p>
+		</div>
+		<a href="/admin/portafolio/nuevo" class="btn btn-primary">+ Nuevo proyecto</a>
+	</div>
+
+	<section class="card">
+		{
+			projects.length ? (
+				<div class="table-wrap">
+					<table>
+						<thead><tr><th></th><th>Proyecto</th><th>Categoría</th><th>Fotos</th><th>Creado</th><th>Estado</th><th></th></tr></thead>
+						<tbody>
+							{projects.map((p) => {
+								const cover = p.cover_url || [...(p.photos ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0]?.url;
+								return (
+									<tr>
+										<td>{cover ? <img class="thumb" src={cover} alt="" loading="lazy" /> : <span class="thumb-empty">{p.title[0]}</span>}</td>
+										<td>
+											<span class="cell-main">{p.title}{p.featured && ' ★'}</span>
+											<span class="cell-sub">{p.client ?? `/portafolio/${p.slug}`}</span>
+										</td>
+										<td>{p.category?.name ?? '—'}</td>
+										<td>{p.photos?.length ?? 0}</td>
+										<td>{formatDate(p.created_at)}</td>
+										<td><span class:list={['tag', p.published ? 'tag-on' : 'tag-off']}>{p.published ? 'Publicado' : 'Borrador'}</span></td>
+										<td>
+											<form method="post" class="row-actions">
+												<input type="hidden" name="id" value={p.id} />
+												<input type="hidden" name="published" value={String(!p.published)} />
+												<a class="btn btn-sm" href={`/admin/portafolio/${p.id}`}>Editar</a>
+												<button class="btn btn-sm" name="_action" value="toggle">{p.published ? 'Retirar' : 'Publicar'}</button>
+												<button class="btn btn-sm btn-danger" name="_action" value="delete" data-confirm={`¿Eliminar "${p.title}" y todas sus fotografías? Esta acción no se puede deshacer.`}>Eliminar</button>
+											</form>
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
+			) : (
+				<p class="empty">Aún no hay proyectos. <a href="/admin/portafolio/nuevo" style="color:var(--gold)">Crea el primero</a>.</p>
+			)
+		}
+	</section>
+</AdminLayout>

@@ -1,0 +1,71 @@
+---
+import Icon from './Icon.astro';
+import type { Settings } from '../lib/types';
+import { whatsappLink } from '../lib/utils';
+
+interface Props {
+	settings: Settings;
+}
+const href = whatsappLink(Astro.props.settings);
+---
+
+{
+	href && (
+		<a class="wa-float" href={href} target="_blank" rel="noopener" aria-label="Escríbenos por WhatsApp" data-magnetic>
+			<span class="wa-ring" aria-hidden="true" />
+			<Icon name="whatsapp" size={26} />
+			<span class="wa-tip">Escríbenos</span>
+		</a>
+	)
+}
+
+<style>
+	.wa-float {
+		position: fixed;
+		right: clamp(16px, 3vw, 32px);
+		bottom: clamp(16px, 3vw, 32px);
+		z-index: 70;
+		display: grid;
+		place-items: center;
+		width: 62px;
+		height: 62px;
+		border-radius: 50%;
+		color: var(--ink);
+		background: var(--gold-gradient);
+		background-size: 220% 100%;
+		animation: shimmer 6s linear infinite;
+		box-shadow: 0 18px 50px -12px rgba(212, 175, 55, 0.6);
+	}
+	.wa-ring {
+		position: absolute;
+		inset: -6px;
+		border: 1px solid var(--gold);
+		border-radius: 50%;
+		animation: ring 2.8s var(--ease-lux) infinite;
+	}
+	.wa-tip {
+		position: absolute;
+		right: calc(100% + 14px);
+		padding: 8px 14px;
+		white-space: nowrap;
+		background: var(--surface-2);
+		border: 1px solid var(--line-strong);
+		border-radius: 999px;
+		color: var(--text);
+		font-size: 0.72rem;
+		letter-spacing: 0.16em;
+		text-transform: uppercase;
+		opacity: 0;
+		transform: translateX(10px);
+		transition: opacity 0.5s, transform 0.6s var(--ease-lux);
+		pointer-events: none;
+	}
+	.wa-float:hover .wa-tip {
+		opacity: 1;
+		transform: translateX(0);
+	}
+	@keyframes ring {
+		0% { transform: scale(0.9); opacity: 0.9; }
+		100% { transform: scale(1.45); opacity: 0; }
+	}
+</style>

@@ -1,0 +1,219 @@
+---
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { back, friendlyDbError, getFiles, removeFromStorage, uploadImage } from '../../../lib/admin';
+import { bool, field, int, slugify } from '../../../lib/utils';
+import type { Category, Photo, Project } from '../../../lib/types';
+
+const sb = Astro.locals.supabase!;
+const id = Astro.params.id!;
+const isNew = id === 'nuevo';
+
+let project: Partial<Project> = { title: '', slug: '', description: '', client: '', category_id: null, featured: false, published: false, sort_order: 0, cover_url: null };
+if (!isNew) {
+	const { data } = await sb.from('projects').select('*').eq('id', id).maybeSingle();
+	if (!data) return Astro.redirect('/admin/portafolio?err=El proyecto no existe.');
+	project = data as Project;
+}
+
+let error = '';
+if (Astro.request.method === 'POST') {
+	const form = await Astro.request.formData();
+	const action = field(form, '_action');
+
+	// ---------- Acciones sobre fotografías ----------
+	if (!isNew && action === 'upload') {
+		const files = getFiles(form, 'photos').slice(0, 30);
+		if (!files.length) return back(Astro.url, { err: 'Selecciona al menos una fotografía.' });
+		const consent = bool(form, 'consent_confirmed');
+		const { count } = await sb.from('photos').select('id', { count: 'exact', head: true }).eq('project_id', id);
+		const errors: string[] = [];
+		let order = count ?? 0;
+		for (const file of files) {
+			const up = await uploadImage(sb, file, `projects/${id}`);
+			if ('error' in up) {
+				errors.push(up.error ?? 'Error');
+				continue;
+			}
+			const { error: e } = await sb.from('photos').insert({
+				project_id: id,
+				url: up.url,
+				storage_path: up.path,
+				alt_text: project.title,
+				sort_order: order++,
+				consent_confirmed: consent,
+				published: true,
+			});
+			if (e) errors.push(e.message);
+		}
+		const ok = files.length - errors.length;
+		return back(Astro.url, errors.length ? { err: `${ok} subida(s) correcta(s). ${errors.join(' ')}` } : { ok: `${ok} fotografía(s) subida(s).` });
+	}
+
+	if (!isNew && action === 'photo-update') {
+		const pid = field(form, 'photo_id', 64);
+		const { error: e } = await sb
+			.from('photos')
+			.update({
+				alt_text: field(form, 'alt_text', 300),
+				description: field(form, 'description', 600) || null,
+				sort_order: int(form, 'sort_order'),
+				published: bool(form, 'published'),
+				consent_confirmed: bool(form, 'consent_confirmed'),
+			})
+			.eq('id', pid);
+		return back(Astro.url, e ? { err: friendlyDbError(e) } : { ok: 'Fotografía actualizada.' });
+	}
+
+	if (!isNew && action === 'photo-cover') {
+		const { error: e } = await sb.from('projects').update({ cover_url: field(form, 'url', 1000) }).eq('id', id);
+		return back(Astro.url, e ? { err: friendlyDbError(e) } : { ok: 'Portada actualizada.' });
+	}
+
+	if (!isNew && action === 'photo-delete') {
+		const pid = field(form, 'photo_id', 64);
+		const { data: ph } = await sb.from('photos').select('storage_path,url').eq('id', pid).maybeSingle();
+		const { error: e } = await sb.from('photos').delete().eq('id', pid);
+		if (!e) {
+			await removeFromStorage(sb, [ph?.storage_path]);
+			if (ph?.url && ph.url === project.cover_url) await sb.from('projects').update({ cover_url: null }).eq('id', id);
+		}
+		return back(Astro.url, e ? { err: friendlyDbError(e) } : { ok: 'Fotografía eliminada.' });
+	}
+
+	// ---------- Guardar proyecto ----------
+	const title = field(form, 'title', 160);
+	const payload = {
+		title,
+		slug: slugify(field(form, 'slug', 80) || title),
+		description: field(form, 'description', 5000) || null,
+		client: field(form, 'client', 160) || null,
+		category_id: field(form, 'category_id', 64) || null,
+		featured: bool(form, 'featured'),
+		published: bool(form, 'published'),
+		sort_order: int(form, 'sort_order'),
+	};
+	project = { ...project, ...payload };
+	if (title.length < 2) error = 'El nombre del proyecto es obligatorio.';
+	else if (!payload.category_id) error = 'Selecciona una categoría para el proyecto.';
+
+	if (!error) {
+		const res = isNew ? await sb.from('projects').insert(payload).select('id').single() : await sb.from('projects').update(payload).eq('id', id).select('id').single();
+		if (res.error) error = friendlyDbError(res.error);
+		else return back(Astro.url, { ok: isNew ? 'Proyecto creado. Ahora sube sus fotografías.' : 'Proyecto guardado.' }, `/admin/portafolio/${res.data.id}`);
+	}
+}
+
+const [{ data: cats }, photosRes] = await Promise.all([
+	sb.from('categories').select('*').order('sort_order'),
+	isNew ? Promise.resolve({ data: [] }) : sb.from('photos').select('*').eq('project_id', id).order('sort_order'),
+]);
+const categories = (cats ?? []) as Category[];
+const photos = (photosRes.data ?? []) as Photo[];
+const pendingConsent = photos.filter((p) => !p.consent_confirmed).length;
+---
+
+<AdminLayout title={isNew ? 'Nuevo proyecto' : project.title ?? 'Proyecto'}>
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / <a href="/admin/portafolio">Portafolio</a> / {isNew ? 'Nuevo' : 'Editar'}</p>
+			<h1>{isNew ? 'Nuevo proyecto' : project.title}</h1>
+		</div>
+		{!isNew && project.published && <a class="btn" href={`/portafolio/${project.slug}`} target="_blank" rel="noopener">Ver publicado ↗</a>}
+	</div>
+
+	{error && <div class="flash flash-err" role="alert">⚠ {error}</div>}
+	{!categories.length && <div class="flash flash-info">Primero crea al menos una <a href="/admin/categorias" style="color:var(--gold)">categoría</a>.</div>}
+
+	<form method="post" class="split">
+		<input type="hidden" name="_action" value="save" />
+		<section class="card form">
+			<div class="form-grid">
+				<div class="f">
+					<label for="title">Nombre del proyecto *</label>
+					<input id="title" name="title" type="text" required maxlength="160" value={project.title} data-slug-source="#slug" />
+				</div>
+				<div class="f">
+					<label for="slug">Slug (URL)</label>
+					<input id="slug" name="slug" type="text" maxlength="80" value={project.slug} />
+				</div>
+				<div class="f">
+					<label for="client">Cliente</label>
+					<input id="client" name="client" type="text" maxlength="160" value={project.client ?? ''} />
+					<small>Publícalo solo si el cliente lo autoriza.</small>
+				</div>
+				<div class="f">
+					<label for="category_id">Categoría *</label>
+					<select id="category_id" name="category_id" required>
+						<option value="">Selecciona…</option>
+						{categories.map((c) => (<option value={c.id} selected={project.category_id === c.id}>{c.name}{!c.active && ' (inactiva)'}</option>))}
+					</select>
+				</div>
+				<div class="f span-2">
+					<label for="description">Descripción</label>
+					<textarea id="description" name="description" rows="6">{project.description ?? ''}</textarea>
+				</div>
+			</div>
+		</section>
+		<section class="card form">
+			<div class="f">
+				<label for="sort_order">Orden</label>
+				<input id="sort_order" name="sort_order" type="number" value={project.sort_order} />
+			</div>
+			<label class="check"><input type="checkbox" name="featured" checked={project.featured} /> Destacado en la página de inicio</label>
+			<label class="check"><input type="checkbox" name="published" checked={project.published} /> Publicado (visible en el sitio)</label>
+			<div class="form-actions">
+				<button class="btn btn-primary" type="submit">{isNew ? 'Crear proyecto' : 'Guardar proyecto'}</button>
+				<a class="btn btn-ghost" href="/admin/portafolio">Cancelar</a>
+			</div>
+		</section>
+	</form>
+
+	{
+		!isNew && (
+			<section class="card">
+				<h2 class="card-title">Fotografías ({photos.length})</h2>
+
+				{pendingConsent > 0 && (
+					<div class="flash flash-info">
+						{pendingConsent} fotografía(s) sin autorización de uso confirmada. Verifica los permisos antes de publicar imágenes con personas identificables (RN-008).
+					</div>
+				)}
+
+				<form method="post" enctype="multipart/form-data" class="form upload">
+					<input type="hidden" name="_action" value="upload" />
+					<div class="f">
+						<span class="f-label">Subir fotografías</span>
+						<input type="file" name="photos" accept="image/jpeg,image/png,image/webp,image/avif" multiple required data-optimize />
+						<small data-optimize-note>Hasta 30 archivos por carga · máx. 8 MB c/u. Se convierten a WebP optimizado.</small>
+					</div>
+					<label class="check"><input type="checkbox" name="consent_confirmed" /> Confirmo que se cuenta con autorización para publicar estas fotografías</label>
+					<div class="form-actions"><button class="btn btn-primary">Subir fotografías</button></div>
+				</form>
+
+				{photos.length ? (
+					<div class="photo-grid" style="margin-top:24px">
+						{photos.map((ph) => (
+							<form method="post" class:list={['photo', { 'is-cover': project.cover_url === ph.url }]}>
+								<input type="hidden" name="photo_id" value={ph.id} />
+								<input type="hidden" name="url" value={ph.url} />
+								<a href={ph.url} target="_blank" rel="noopener"><img src={ph.url} alt={ph.alt_text} loading="lazy" /></a>
+								<input type="text" name="alt_text" value={ph.alt_text} placeholder="Texto alternativo (accesibilidad)" aria-label="Texto alternativo" />
+								<input type="text" name="description" value={ph.description ?? ''} placeholder="Descripción (opcional)" aria-label="Descripción" />
+								<input type="number" name="sort_order" value={ph.sort_order} aria-label="Orden" />
+								<label class="check"><input type="checkbox" name="published" checked={ph.published} /> Visible</label>
+								<label class="check"><input type="checkbox" name="consent_confirmed" checked={ph.consent_confirmed} /> Autorización confirmada</label>
+								<div class="row-actions" style="justify-content:flex-start">
+									<button class="btn btn-sm" name="_action" value="photo-update">Guardar</button>
+									{project.cover_url !== ph.url && <button class="btn btn-sm" name="_action" value="photo-cover">Usar de portada</button>}
+									<button class="btn btn-sm btn-danger" name="_action" value="photo-delete" data-confirm="¿Eliminar esta fotografía?">Eliminar</button>
+								</div>
+							</form>
+						))}
+					</div>
+				) : (
+					<p class="empty">Este proyecto aún no tiene fotografías.</p>
+				)}
+			</section>
+		)
+	}
+</AdminLayout>

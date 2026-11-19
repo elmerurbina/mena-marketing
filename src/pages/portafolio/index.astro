@@ -1,0 +1,148 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import PageHero from '../../components/PageHero.astro';
+import ProjectCard from '../../components/ProjectCard.astro';
+import { getCategories, getProjects, getSettings } from '../../lib/content';
+
+const sb = Astro.locals.supabase;
+const [settings, projects, categories] = await Promise.all([getSettings(sb), getProjects(sb), getCategories(sb)]);
+const initial = Astro.url.searchParams.get('categoria') ?? 'todos';
+const usedCategories = categories.filter((c) => projects.some((p) => p.category_id === c.id) || !projects.length);
+---
+
+<SiteLayout settings={settings} title="Portafolio" description="Fotografía profesional y proyectos creativos realizados por MENA Marketing.">
+	<PageHero
+		eyebrow="Portafolio"
+		title={`Historias contadas en <span class="italic text-gold">imágenes</span>`}
+		lead="Una selección de proyectos fotográficos, de contenido y publicidad realizados para nuestros clientes."
+	/>
+
+	<section class="section section--tight">
+		<div class="container">
+			<div class="filters" role="tablist" aria-label="Filtrar por categoría" data-filters data-initial={initial} data-reveal>
+				<button role="tab" class="filter" data-filter="todos" aria-selected="true">Todos</button>
+				{usedCategories.map((c) => (<button role="tab" class="filter" data-filter={c.slug} aria-selected="false">{c.name}</button>))}
+			</div>
+
+			{
+				projects.length > 0 ? (
+					<>
+						<div class="proj-grid" data-proj-grid>
+							{projects.map((p, i) => (
+								<div class="proj-cell" data-cell data-category={p.category?.slug ?? ''}>
+									<ProjectCard project={p} index={i} tall={i % 3 === 0} />
+								</div>
+							))}
+						</div>
+						<p class="empty-cat muted" data-empty hidden>Aún no hay proyectos publicados en esta categoría.</p>
+					</>
+				) : (
+					<div class="empty" data-reveal>
+						<p class="display-sm">Muy pronto compartiremos aquí nuestros proyectos.</p>
+						<p class="muted">Estamos seleccionando los trabajos que mejor representan nuestra forma de crear.</p>
+						<a href="/contacto" class="btn">Hablemos de tu proyecto</a>
+					</div>
+				)
+			}
+		</div>
+	</section>
+</SiteLayout>
+
+<script>
+	import gsap from 'gsap';
+	import { ScrollTrigger } from 'gsap/ScrollTrigger';
+
+	const bar = document.querySelector<HTMLElement>('[data-filters]');
+	const cells = Array.from(document.querySelectorAll<HTMLElement>('[data-cell]'));
+	const empty = document.querySelector<HTMLElement>('[data-empty]');
+
+	function apply(filter: string, animate = true) {
+		bar?.querySelectorAll<HTMLButtonElement>('[data-filter]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.filter === filter)));
+		const show = cells.filter((c) => filter === 'todos' || c.dataset.category === filter);
+		const hide = cells.filter((c) => !show.includes(c));
+		const done = () => {
+			hide.forEach((c) => (c.hidden = true));
+			show.forEach((c) => (c.hidden = false));
+			if (empty) empty.hidden = show.length > 0;
+			ScrollTrigger.refresh();
+			if (animate) gsap.fromTo(show, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 1, stagger: 0.07, ease: 'expo.out' });
+		};
+		if (animate) gsap.to(cells.filter((c) => !c.hidden), { opacity: 0, y: -20, duration: 0.35, stagger: 0.02, onComplete: done });
+		else done();
+		const url = new URL(location.href);
+		if (filter === 'todos') url.searchParams.delete('categoria');
+		else url.searchParams.set('categoria', filter);
+		history.replaceState(null, '', url);
+	}
+
+	if (bar) {
+		bar.addEventListener('click', (e) => {
+			const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-filter]');
+			if (b) apply(b.dataset.filter!);
+		});
+		const initial = bar.dataset.initial ?? 'todos';
+		if (initial !== 'todos') apply(initial, false);
+	}
+</script>
+
+<style>
+	.filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-bottom: clamp(40px, 6vw, 80px);
+	}
+	.filter {
+		padding: 12px 22px;
+		border: 1px solid var(--line-strong);
+		border-radius: 999px;
+		background: transparent;
+		cursor: pointer;
+		font-size: 0.72rem;
+		font-weight: 600;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: var(--text-soft);
+		transition: background 0.5s var(--ease-lux), color 0.5s, border-color 0.5s;
+	}
+	.filter:hover {
+		border-color: var(--gold);
+		color: var(--text);
+	}
+	.filter[aria-selected='true'] {
+		background: var(--gold-gradient);
+		background-size: 200% 100%;
+		color: var(--ink);
+		border-color: transparent;
+	}
+	.proj-grid {
+		display: grid;
+		gap: clamp(30px, 4vw, 56px) clamp(20px, 3vw, 40px);
+	}
+	@media (min-width: 700px) {
+		.proj-grid {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.proj-cell:nth-child(even) {
+			margin-top: 80px;
+		}
+	}
+	@media (min-width: 1100px) {
+		.proj-grid {
+			grid-template-columns: repeat(3, 1fr);
+		}
+		.proj-cell:nth-child(even) {
+			margin-top: 0;
+		}
+		.proj-cell:nth-child(3n + 2) {
+			margin-top: 110px;
+		}
+	}
+	.empty,
+	.empty-cat {
+		display: grid;
+		gap: 16px;
+		justify-items: start;
+		padding: 40px 0;
+	}
+</style>

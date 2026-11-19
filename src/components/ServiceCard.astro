@@ -1,0 +1,110 @@
+---
+import ArtFrame from './ArtFrame.astro';
+import Icon from './Icon.astro';
+import type { Service } from '../lib/types';
+
+interface Props {
+	service: Service;
+	index: number;
+}
+const { service, index } = Astro.props;
+const num = String(index + 1).padStart(2, '0');
+---
+
+<a href={`/servicios/${service.slug}`} class="svc-card" data-tilt data-cursor="Ver">
+	<div class="svc-media">
+		{
+			service.image_url ? (
+				<img src={service.image_url} alt={service.name} loading="lazy" decoding="async" />
+			) : (
+				<ArtFrame seed={index} label={service.name} />
+			)
+		}
+		<span class="svc-glare" aria-hidden="true"></span>
+	</div>
+	<div class="svc-body">
+		<span class="svc-num">{num}</span>
+		<h3 class="display-sm">{service.name}</h3>
+		<p>{service.summary}</p>
+		<span class="svc-more">Descubrir <Icon name="arrow" size={16} /></span>
+	</div>
+</a>
+
+<style>
+	.svc-card {
+		position: relative;
+		display: grid;
+		grid-template-rows: auto 1fr;
+		height: 100%;
+		background: linear-gradient(180deg, var(--surface) 0%, var(--ink-2) 100%);
+		border: 1px solid var(--line);
+		border-radius: var(--radius);
+		overflow: hidden;
+		transition: border-color 0.6s var(--ease-lux);
+		transform-style: preserve-3d;
+	}
+	.svc-card:hover {
+		border-color: var(--line-strong);
+	}
+	.svc-media {
+		position: relative;
+		aspect-ratio: 4 / 3;
+		overflow: hidden;
+	}
+	.svc-media img,
+	.svc-media :global(.art) {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		transition: transform 1.4s var(--ease-lux);
+	}
+	.svc-card:hover .svc-media img,
+	.svc-card:hover .svc-media :global(.art) {
+		transform: scale(1.07);
+	}
+	.svc-glare {
+		position: absolute;
+		inset: 0;
+		background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(247, 224, 138, 0.22), transparent 45%);
+		opacity: 0;
+		transition: opacity 0.6s;
+		pointer-events: none;
+	}
+	.svc-card:hover .svc-glare {
+		opacity: 1;
+	}
+	.svc-body {
+		display: grid;
+		align-content: start;
+		gap: 14px;
+		padding: clamp(24px, 3vw, 36px);
+	}
+	.svc-num {
+		font-family: var(--font-display);
+		font-style: italic;
+		font-size: 1.1rem;
+		color: var(--gold);
+	}
+	.svc-body p {
+		margin: 0;
+		color: var(--text-soft);
+		font-size: 0.95rem;
+	}
+	.svc-more {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 10px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.24em;
+		text-transform: uppercase;
+		color: var(--gold);
+	}
+	.svc-more :global(svg) {
+		transition: transform 0.6s var(--ease-lux);
+	}
+	.svc-card:hover .svc-more :global(svg) {
+		transform: translateX(6px);
+	}
+</style>

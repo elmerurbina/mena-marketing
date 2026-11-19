@@ -1,0 +1,203 @@
+---
+import Icon from './Icon.astro';
+---
+
+<div class="lb" data-lb role="dialog" aria-modal="true" aria-label="Visor de fotografías" hidden>
+	<div class="lb-backdrop" data-lb-close></div>
+	<figure class="lb-figure">
+		<div class="lb-stage">
+			<img class="lb-img" data-lb-img alt="" />
+			<div class="lb-fallback" data-lb-fallback hidden>No fue posible cargar esta imagen.</div>
+		</div>
+		<figcaption class="lb-caption">
+			<span data-lb-caption></span>
+			<span class="lb-count" data-lb-count></span>
+		</figcaption>
+	</figure>
+	<button class="lb-btn lb-close" data-lb-close aria-label="Cerrar visor"><Icon name="close" size={22} /></button>
+	<button class="lb-btn lb-prev" data-lb-prev aria-label="Fotografía anterior"><Icon name="chevron-left" size={22} /></button>
+	<button class="lb-btn lb-next" data-lb-next aria-label="Fotografía siguiente"><Icon name="chevron" size={22} /></button>
+</div>
+
+<script>
+	import gsap from 'gsap';
+	import { getLenis } from '../scripts/motion';
+
+	const lb = document.querySelector<HTMLElement>('[data-lb]');
+	if (lb) {
+		const img = lb.querySelector<HTMLImageElement>('[data-lb-img]')!;
+		const caption = lb.querySelector<HTMLElement>('[data-lb-caption]')!;
+		const count = lb.querySelector<HTMLElement>('[data-lb-count]')!;
+		const fallback = lb.querySelector<HTMLElement>('[data-lb-fallback]')!;
+		let items: HTMLAnchorElement[] = [];
+		let index = 0;
+		let lastFocus: HTMLElement | null = null;
+
+		const visibleItems = () =>
+			Array.from(document.querySelectorAll<HTMLAnchorElement>('[data-lightbox]')).filter((a) => a.offsetParent !== null);
+
+		const show = (i: number, dir = 0) => {
+			index = (i + items.length) % items.length;
+			const a = items[index];
+			fallback.hidden = true;
+			img.hidden = false;
+			gsap.fromTo(img, { opacity: 0, x: dir * 60, scale: 0.97 }, { opacity: 1, x: 0, scale: 1, duration: 0.9, ease: 'expo.out' });
+			img.src = a.href;
+			img.alt = a.dataset.alt ?? '';
+			caption.textContent = a.dataset.caption ?? '';
+			count.textContent = `${String(index + 1).padStart(2, '0')} / ${String(items.length).padStart(2, '0')}`;
+		};
+
+		img.addEventListener('error', () => {
+			img.hidden = true;
+			fallback.hidden = false;
+		});
+
+		const open = (a: HTMLAnchorElement) => {
+			items = visibleItems();
+			lastFocus = document.activeElement as HTMLElement;
+			lb.hidden = false;
+			getLenis()?.stop();
+			document.body.style.overflow = 'hidden';
+			gsap.fromTo(lb, { opacity: 0 }, { opacity: 1, duration: 0.5 });
+			show(items.indexOf(a));
+			lb.querySelector<HTMLElement>('.lb-close')?.focus();
+		};
+		const close = () => {
+			gsap.to(lb, {
+				opacity: 0,
+				duration: 0.4,
+				onComplete: () => {
+					lb.hidden = true;
+					img.removeAttribute('src');
+				},
+			});
+			getLenis()?.start();
+			document.body.style.overflow = '';
+			lastFocus?.focus();
+		};
+
+		document.addEventListener('click', (e) => {
+			const a = (e.target as HTMLElement).closest<HTMLAnchorElement>('[data-lightbox]');
+			if (!a) return;
+			e.preventDefault();
+			open(a);
+		});
+		lb.querySelectorAll('[data-lb-close]').forEach((b) => b.addEventListener('click', close));
+		lb.querySelector('[data-lb-prev]')!.addEventListener('click', () => show(index - 1, -1));
+		lb.querySelector('[data-lb-next]')!.addEventListener('click', () => show(index + 1, 1));
+		document.addEventListener('keydown', (e) => {
+			if (lb.hidden) return;
+			if (e.key === 'Escape') close();
+			if (e.key === 'ArrowRight') show(index + 1, 1);
+			if (e.key === 'ArrowLeft') show(index - 1, -1);
+			if (e.key === 'Tab') {
+				const f = Array.from(lb.querySelectorAll<HTMLElement>('button'));
+				const i = f.indexOf(document.activeElement as HTMLElement);
+				e.preventDefault();
+				f[(i + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus();
+			}
+		});
+		// Gesto táctil
+		let sx = 0;
+		lb.addEventListener('touchstart', (e) => (sx = e.touches[0].clientX), { passive: true });
+		lb.addEventListener('touchend', (e) => {
+			const d = e.changedTouches[0].clientX - sx;
+			if (Math.abs(d) > 50) show(index + (d < 0 ? 1 : -1), d < 0 ? 1 : -1);
+		});
+	}
+</script>
+
+<style>
+	.lb {
+		position: fixed;
+		inset: 0;
+		z-index: 170;
+		display: grid;
+		place-items: center;
+	}
+	.lb[hidden] {
+		display: none;
+	}
+	.lb-backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(7, 6, 10, 0.94);
+		backdrop-filter: blur(10px);
+	}
+	.lb-figure {
+		position: relative;
+		margin: 0;
+		display: grid;
+		gap: 16px;
+		max-width: min(92vw, 1400px);
+	}
+	.lb-stage {
+		display: grid;
+		place-items: center;
+	}
+	.lb-img {
+		max-height: 80vh;
+		max-width: 100%;
+		width: auto;
+		object-fit: contain;
+		border-radius: var(--radius);
+		box-shadow: 0 40px 120px -30px rgba(0, 0, 0, 0.9);
+	}
+	.lb-fallback {
+		padding: 80px 40px;
+		color: var(--muted);
+		border: 1px solid var(--line);
+	}
+	.lb-caption {
+		display: flex;
+		justify-content: space-between;
+		gap: 20px;
+		font-size: 0.85rem;
+		color: var(--text-soft);
+	}
+	.lb-count {
+		font-size: 0.72rem;
+		letter-spacing: 0.24em;
+		color: var(--gold);
+	}
+	.lb-btn {
+		position: absolute;
+		display: grid;
+		place-items: center;
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		border: 1px solid var(--line-strong);
+		background: rgba(7, 6, 10, 0.6);
+		color: var(--text);
+		cursor: pointer;
+		transition: background 0.4s, color 0.4s;
+	}
+	.lb-btn:hover {
+		background: var(--gold);
+		color: var(--ink);
+	}
+	.lb-close {
+		top: 20px;
+		right: 20px;
+	}
+	.lb-prev {
+		left: 20px;
+		top: 50%;
+		translate: 0 -50%;
+	}
+	.lb-next {
+		right: 20px;
+		top: 50%;
+		translate: 0 -50%;
+	}
+	@media (max-width: 700px) {
+		.lb-prev,
+		.lb-next {
+			top: auto;
+			bottom: 20px;
+			translate: none;
+		}
+	}
+</style>

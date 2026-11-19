@@ -1,0 +1,204 @@
+---
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import Lightbox from '../../components/Lightbox.astro';
+import ArtFrame from '../../components/ArtFrame.astro';
+import Icon from '../../components/Icon.astro';
+import { getProject, getSettings } from '../../lib/content';
+import { formatDate } from '../../lib/utils';
+
+const sb = Astro.locals.supabase;
+const [settings, project] = await Promise.all([getSettings(sb), getProject(sb, Astro.params.slug ?? '')]);
+if (!project) return Astro.rewrite('/404');
+const photos = project.photos ?? [];
+---
+
+<SiteLayout settings={settings} title={project.title} description={project.description ?? `Proyecto de ${settings.name}`} image={project.cover_url}>
+	<section class="p-hero">
+		<div class="container p-hero-inner">
+			<a href="/portafolio" class="back" data-hero><Icon name="chevron-left" size={16} /> Portafolio</a>
+			{project.category && <p class="eyebrow" data-hero>{project.category.name}</p>}
+			<h1 class="display-xl" data-split="hero">{project.title}</h1>
+			<dl class="p-meta" data-hero>
+				{project.client && (<div><dt>Cliente</dt><dd>{project.client}</dd></div>)}
+				{project.category && (<div><dt>Categoría</dt><dd>{project.category.name}</dd></div>)}
+				<div><dt>Fecha</dt><dd>{formatDate(project.created_at)}</dd></div>
+				<div><dt>Fotografías</dt><dd>{photos.length}</dd></div>
+			</dl>
+		</div>
+	</section>
+
+	<div class="container">
+		<div class="p-cover" data-hero-media>
+			{project.cover_url ? <img src={project.cover_url} alt={photos[0]?.alt_text || project.title} data-parallax="0.08" /> : <ArtFrame seed={3} />}
+		</div>
+	</div>
+
+	{
+		project.description && (
+			<section class="section section--tight">
+				<div class="container p-desc">
+					<p class="eyebrow" data-reveal>El proyecto</p>
+					<p class="display-sm" data-reveal>{project.description}</p>
+				</div>
+			</section>
+		)
+	}
+
+	<section class="section section--tight">
+		<div class="container">
+			{
+				photos.length ? (
+					<div class="gallery">
+						{photos.map((ph, i) => (
+							<a
+								href={ph.url}
+								class="g-item"
+								data-lightbox
+								data-caption={ph.description || ph.alt_text}
+								data-alt={ph.alt_text || project.title}
+								data-reveal
+								data-cursor="Ampliar"
+								aria-label={`Ampliar fotografía ${i + 1}: ${ph.alt_text || project.title}`}
+							>
+								<img src={ph.url} alt={ph.alt_text || `${project.title} — fotografía ${i + 1}`} loading="lazy" decoding="async" />
+								<span class="g-zoom"><Icon name="expand" size={18} /></span>
+							</a>
+						))}
+					</div>
+				) : (
+					<p class="muted">Este proyecto aún no tiene fotografías publicadas.</p>
+				)
+			}
+		</div>
+	</section>
+
+	<section class="section section--tight">
+		<div class="container p-cta" data-reveal>
+			<p class="display-md">¿Imaginas algo así para <span class="italic text-gold">tu marca?</span></p>
+			<a href="/contacto" class="btn btn--gold" data-magnetic>Hablemos <Icon name="arrow" size={16} class="btn-arrow" /></a>
+		</div>
+	</section>
+
+	<Lightbox />
+</SiteLayout>
+
+<style>
+	.p-hero {
+		padding-top: calc(var(--header-h) + clamp(60px, 9vw, 130px));
+		padding-bottom: clamp(40px, 6vw, 80px);
+	}
+	.p-hero-inner {
+		display: grid;
+		gap: 26px;
+	}
+	.back {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.72rem;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.back:hover {
+		color: var(--gold);
+	}
+	.p-meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 20px 56px;
+		margin: 20px 0 0;
+		padding-top: 26px;
+		border-top: 1px solid var(--line);
+	}
+	.p-meta dt {
+		font-size: 0.66rem;
+		letter-spacing: 0.26em;
+		text-transform: uppercase;
+		color: var(--gold);
+		margin-bottom: 6px;
+	}
+	.p-meta dd {
+		margin: 0;
+	}
+	.p-cover {
+		aspect-ratio: 16 / 8;
+		overflow: hidden;
+		border-radius: var(--radius);
+	}
+	@media (max-width: 700px) {
+		.p-cover {
+			aspect-ratio: 4 / 3;
+		}
+	}
+	.p-cover img {
+		width: 100%;
+		height: 120%;
+		object-fit: cover;
+	}
+	.p-desc {
+		display: grid;
+		gap: 24px;
+		max-width: 980px;
+	}
+	.gallery {
+		columns: 1;
+		column-gap: 20px;
+	}
+	@media (min-width: 640px) {
+		.gallery {
+			columns: 2;
+		}
+	}
+	@media (min-width: 1100px) {
+		.gallery {
+			columns: 3;
+		}
+	}
+	.g-item {
+		position: relative;
+		display: block;
+		margin-bottom: 20px;
+		break-inside: avoid;
+		overflow: hidden;
+		border-radius: var(--radius);
+		background: var(--surface);
+	}
+	.g-item img {
+		width: 100%;
+		transition: transform 1.4s var(--ease-lux), filter 0.8s;
+	}
+	.g-item:hover img {
+		transform: scale(1.05);
+		filter: brightness(0.8);
+	}
+	.g-zoom {
+		position: absolute;
+		right: 16px;
+		bottom: 16px;
+		display: grid;
+		place-items: center;
+		width: 44px;
+		height: 44px;
+		border-radius: 50%;
+		background: var(--gold);
+		color: var(--ink);
+		opacity: 0;
+		transform: scale(0.6);
+		transition: opacity 0.5s, transform 0.6s var(--ease-lux);
+	}
+	.g-item:hover .g-zoom,
+	.g-item:focus-visible .g-zoom {
+		opacity: 1;
+		transform: scale(1);
+	}
+	.p-cta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 30px;
+		padding-top: 60px;
+		border-top: 1px solid var(--line);
+	}
+</style>

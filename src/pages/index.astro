@@ -1,11 +1,669 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import LogoMark from '../components/LogoMark.astro';
+import Icon from '../components/Icon.astro';
+import Marquee from '../components/Marquee.astro';
+import ServiceCard from '../components/ServiceCard.astro';
+import ProjectCard from '../components/ProjectCard.astro';
+import ArtFrame from '../components/ArtFrame.astro';
+import { getCategories, getProjects, getServices, getSettings } from '../lib/content';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+const sb = Astro.locals.supabase;
+const [settings, services, projects, categories] = await Promise.all([
+	getSettings(sb),
+	getServices(sb),
+	getProjects(sb, { featured: true, limit: 4 }).then(async (f) => (f.length ? f : getProjects(sb, { limit: 4 }))),
+	getCategories(sb),
+]);
+
+const stats = [
+	{ value: settings.stat_projects, label: 'Proyectos realizados' },
+	{ value: settings.stat_clients, label: 'Marcas acompañadas' },
+	{ value: settings.stat_years, label: 'Años de experiencia' },
+].filter((s) => typeof s.value === 'number' && s.value > 0);
+
+const pillars = [
+	{ title: 'Estrategia', text: 'Decisiones claras para posicionar tu marca donde debe estar.' },
+	{ title: 'Creatividad', text: 'Contenido gráfico y audiovisual con una estética que se distingue.' },
+	{ title: 'Fotografía', text: 'Imágenes que capturan la esencia de tus eventos, productos y equipo.' },
+];
+
+const process = [
+	{ title: 'Escuchamos', text: 'Conocemos tu marca, tus objetivos y a quién quieres llegar.' },
+	{ title: 'Planificamos', text: 'Definimos la estrategia y la línea creativa más adecuada.' },
+	{ title: 'Creamos', text: 'Producimos contenido, fotografía y piezas con acabado profesional.' },
+	{ title: 'Acompañamos', text: 'Damos seguimiento para que tu comunicación evolucione.' },
+];
+
+const [titleA, ...titleRest] = settings.hero_title.split(' ');
 ---
 
-<Layout>
-	<Welcome />
-</Layout>
+<SiteLayout settings={settings}>
+	<!-- ============ HERO ============ -->
+	<section class="hero" aria-labelledby="hero-title">
+		<div class="hero-bg" aria-hidden="true">
+			<div class="orb orb--purple hero-orb-1"></div>
+			<div class="orb orb--gold hero-orb-2"></div>
+			<div class="hero-grid"></div>
+		</div>
+
+		<div class="container hero-inner">
+			<div class="hero-copy">
+				<p class="eyebrow" data-hero>{settings.tagline}</p>
+				<h1 id="hero-title" class="display-xl hero-title" data-split="hero">
+					{titleA} <span class="italic text-gold">{titleRest.join(' ')}</span>
+				</h1>
+				<p class="lead" data-hero>{settings.hero_subtitle}</p>
+				<div class="hero-actions" data-hero>
+					<a href="/contacto" class="btn btn--gold" data-magnetic>
+						Solicitar cotización <Icon name="arrow" size={16} class="btn-arrow" />
+					</a>
+					<a href="/portafolio" class="btn" data-magnetic>Ver portafolio</a>
+				</div>
+			</div>
+
+			<div class="hero-visual" aria-hidden="true">
+				{
+					settings.hero_image ? (
+						<div class="hero-photo" data-hero-media>
+							<img src={settings.hero_image} alt="" fetchpriority="high" data-parallax="0.08" />
+						</div>
+					) : (
+						<div class="hero-emblem" data-hero-media>
+							<div class="hero-emblem-glow" />
+							<div class="hero-emblem-solid" data-parallax="0.06">
+								<LogoMark variant="gold" title="" />
+							</div>
+						</div>
+					)
+				}
+				<div class="hero-wire" data-parallax="-0.2"><LogoMark variant="wire-purple" title="" animated /></div>
+				<div class="hero-badge">
+					<svg viewBox="0 0 200 200">
+						<defs><path id="circle" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0"></path></defs>
+						<text><textPath href="#circle" textLength="486" lengthAdjust="spacing">Publicidad ✦ Marketing ✦ Fotografía ✦ Contenido ✦ </textPath></text>
+					</svg>
+					<span class="hero-badge-star">✦</span>
+				</div>
+			</div>
+		</div>
+
+		<a href="#intro" class="scroll-cue" data-hero aria-label="Desplazarse al contenido">
+			<span>Scroll</span>
+			<span class="scroll-cue-line"></span>
+		</a>
+	</section>
+
+	<Marquee items={services.length ? services.map((s) => s.name) : ['Marketing', 'Fotografía', 'Contenido', 'Publicidad']} />
+
+	<!-- ============ INTRO ============ -->
+	<section id="intro" class="section intro">
+		<div class="container">
+			<div class="intro-grid">
+				<p class="eyebrow" data-reveal>Sobre MENA</p>
+				<div>
+					<h2 class="display-lg intro-statement" data-split>
+						Creamos presencia para marcas que quieren <span class="italic text-gold">ser recordadas.</span>
+					</h2>
+					<p class="lead intro-lead" data-reveal>{settings.description}</p>
+					<a href="/nosotros" class="link-underline" data-reveal>Conócenos <Icon name="arrow" size={14} /></a>
+				</div>
+			</div>
+
+			{
+				stats.length > 0 ? (
+					<div class="stats">
+						{stats.map((s) => (
+							<div class="stat" data-reveal>
+								<span class="stat-value display-lg">
+									<span data-count={s.value}>{s.value}</span>
+									<span class="text-gold">+</span>
+								</span>
+								<span class="stat-label">{s.label}</span>
+							</div>
+						))}
+					</div>
+				) : (
+					<div class="pillars">
+						{pillars.map((p, i) => (
+							<div class="pillar" data-reveal>
+								<span class="pillar-num">0{i + 1}</span>
+								<h3 class="display-sm">{p.title}</h3>
+								<p>{p.text}</p>
+							</div>
+						))}
+					</div>
+				)
+			}
+		</div>
+	</section>
+
+	<!-- ============ SERVICIOS (scroll horizontal) ============ -->
+	<section class="services-h" data-hscroll aria-labelledby="services-title">
+		<div class="services-h-head container">
+			<div>
+				<p class="eyebrow">Servicios</p>
+				<h2 id="services-title" class="display-lg" data-split>Lo que hacemos <span class="italic text-gold">mejor</span></h2>
+			</div>
+			<div class="services-h-side">
+				<p class="muted">Soluciones integrales de marketing, contenido y fotografía para elevar cada punto de contacto de tu marca.</p>
+				<a href="/servicios" class="link-underline">Todos los servicios <Icon name="arrow" size={14} /></a>
+			</div>
+		</div>
+		<div class="services-h-track" data-hscroll-track>
+			{
+				services.length ? (
+					services.map((s, i) => (
+						<div class="services-h-item">
+							<ServiceCard service={s} index={i} />
+						</div>
+					))
+				) : (
+					<p class="muted container">Pronto publicaremos nuestro catálogo de servicios.</p>
+				)
+			}
+		</div>
+		<div class="container services-h-progress-wrap" aria-hidden="true">
+			<div class="services-h-progress"><span data-hscroll-progress></span></div>
+		</div>
+	</section>
+
+	<!-- ============ PORTAFOLIO ============ -->
+	<section class="section portfolio-teaser" aria-labelledby="work-title">
+		<div class="container">
+			<div class="section-head section-head--split">
+				<div>
+					<p class="eyebrow" data-reveal>Portafolio</p>
+					<h2 id="work-title" class="display-lg" data-split>Trabajo con <span class="italic text-gold">carácter</span></h2>
+				</div>
+				<div data-reveal>
+					<p class="muted">Una selección de proyectos fotográficos y creativos realizados para marcas, negocios y eventos.</p>
+					<a href="/portafolio" class="link-underline">Ver portafolio completo <Icon name="arrow" size={14} /></a>
+				</div>
+			</div>
+
+			{
+				projects.length > 0 ? (
+					<div class="work-grid">
+						{projects.map((p, i) => (
+							<div class:list={['work-item', `work-item--${i % 4}`]}>
+								<ProjectCard project={p} index={i} tall={i % 2 === 0} />
+							</div>
+						))}
+					</div>
+				) : (
+					<div class="cat-grid">
+						{categories.slice(0, 4).map((c, i) => (
+							<a href={`/portafolio?categoria=${c.slug}`} class="cat-tile" data-reveal data-cursor="Explorar">
+								<div class="cat-tile-media" data-img-reveal>
+									<div>
+										<ArtFrame seed={i + 1} />
+									</div>
+								</div>
+								<span class="cat-tile-name display-sm">{c.name}</span>
+								<span class="cat-tile-num">0{i + 1}</span>
+							</a>
+						))}
+					</div>
+				)
+			}
+		</div>
+	</section>
+
+	<Marquee items={['Estrategia', 'Contenido', 'Fotografía', 'Identidad', 'Publicidad']} reverse outline />
+
+	<!-- ============ PROCESO ============ -->
+	<section class="section process" aria-labelledby="process-title">
+		<div class="orb orb--purple process-orb" aria-hidden="true"></div>
+		<div class="container">
+			<div class="section-head">
+				<p class="eyebrow" data-reveal>Cómo trabajamos</p>
+				<h2 id="process-title" class="display-lg" data-split>Un proceso <span class="italic text-gold">cuidado</span> en cada detalle</h2>
+			</div>
+			<ol class="process-list">
+				{
+					process.map((step, i) => (
+						<li class="process-step" data-reveal>
+							<span class="process-num display-md">0{i + 1}</span>
+							<hr class="hairline" data-line />
+							<h3 class="display-sm">{step.title}</h3>
+							<p>{step.text}</p>
+						</li>
+					))
+				}
+			</ol>
+		</div>
+	</section>
+</SiteLayout>
+
+<style>
+	/* ---------- Hero ---------- */
+	.hero {
+		position: relative;
+		min-height: 100svh;
+		display: flex;
+		align-items: center;
+		padding-top: calc(var(--header-h) + 40px);
+		padding-bottom: 110px;
+		overflow: hidden;
+	}
+	.hero-bg {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+	.hero-orb-1 {
+		width: 70vw;
+		height: 70vw;
+		left: -25vw;
+		top: -25vw;
+		animation: float 16s ease-in-out infinite alternate;
+	}
+	.hero-orb-2 {
+		width: 45vw;
+		height: 45vw;
+		right: -10vw;
+		bottom: -20vw;
+		opacity: 0.35;
+		animation: float 20s ease-in-out infinite alternate-reverse;
+	}
+	.hero-grid {
+		position: absolute;
+		inset: 0;
+		background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+		background-size: 120px 120px;
+		mask-image: radial-gradient(70% 60% at 60% 40%, #000 0%, transparent 75%);
+		opacity: 0.35;
+	}
+	@keyframes float {
+		from { transform: translate3d(0, 0, 0) scale(1); }
+		to { transform: translate3d(6vw, 4vw, 0) scale(1.12); }
+	}
+	.hero-inner {
+		position: relative;
+		display: grid;
+		gap: 60px;
+		align-items: center;
+	}
+	@media (min-width: 1024px) {
+		.hero-inner {
+			grid-template-columns: 1.25fr 0.75fr;
+		}
+	}
+	.hero-copy {
+		display: grid;
+		gap: 30px;
+		position: relative;
+		z-index: 2;
+	}
+	.hero-title {
+		max-width: 11ch;
+	}
+	.hero-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 16px;
+		margin-top: 8px;
+	}
+	.hero-visual {
+		position: relative;
+		width: min(100%, 520px);
+		justify-self: center;
+		aspect-ratio: 1 / 1.05;
+	}
+	@media (max-width: 1023px) {
+		.hero-visual {
+			position: absolute;
+			right: -18vw;
+			top: 4%;
+			width: 80vw;
+			opacity: 0.22;
+			z-index: 0;
+		}
+		.hero-visual .hero-badge {
+			display: none;
+		}
+	}
+	.hero-emblem,
+	.hero-photo {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+	}
+	.hero-photo {
+		border-radius: 280px 280px var(--radius) var(--radius);
+		overflow: hidden;
+		border: 1px solid var(--line-strong);
+	}
+	.hero-photo img {
+		width: 100%;
+		height: 120%;
+		object-fit: cover;
+	}
+	.hero-emblem-glow {
+		position: absolute;
+		inset: 15%;
+		border-radius: 50%;
+		background: radial-gradient(circle, rgba(212, 175, 55, 0.35), transparent 65%);
+		filter: blur(40px);
+		animation: pulse 6s ease-in-out infinite;
+	}
+	.hero-emblem-solid {
+		position: relative;
+		width: 78%;
+		filter: drop-shadow(0 30px 60px rgba(212, 175, 55, 0.25));
+		animation: hover 7s ease-in-out infinite;
+	}
+	@keyframes pulse {
+		0%, 100% { opacity: 0.6; transform: scale(0.95); }
+		50% { opacity: 1; transform: scale(1.06); }
+	}
+	@keyframes hover {
+		0%, 100% { translate: 0 0; rotate: 0deg; }
+		50% { translate: 0 -14px; rotate: -1.5deg; }
+	}
+	.hero-wire {
+		position: absolute;
+		width: 62%;
+		left: -22%;
+		bottom: -6%;
+		opacity: 0.55;
+	}
+	.hero-badge {
+		position: absolute;
+		right: -6%;
+		top: -4%;
+		width: 150px;
+		height: 150px;
+		display: grid;
+		place-items: center;
+	}
+	.hero-badge svg {
+		position: absolute;
+		inset: 0;
+		animation: spin 22s linear infinite;
+	}
+	.hero-badge text {
+		fill: var(--gold);
+		font-size: 11.5px;
+		letter-spacing: 1px;
+		text-transform: uppercase;
+		font-family: var(--font-sans);
+	}
+	.hero-badge-star {
+		color: var(--gold-light);
+		font-size: 1.4rem;
+	}
+	@keyframes spin {
+		to { rotate: 360deg; }
+	}
+	.scroll-cue {
+		position: absolute;
+		left: 50%;
+		bottom: 28px;
+		translate: -50% 0;
+		display: grid;
+		justify-items: center;
+		gap: 12px;
+		font-size: 0.62rem;
+		letter-spacing: 0.4em;
+		text-transform: uppercase;
+		color: var(--muted);
+	}
+	.scroll-cue-line {
+		width: 1px;
+		height: 54px;
+		background: linear-gradient(var(--gold), transparent);
+		transform-origin: top;
+		animation: cue 2.4s var(--ease-in-out) infinite;
+	}
+	@keyframes cue {
+		0% { transform: scaleY(0); transform-origin: top; }
+		50% { transform: scaleY(1); transform-origin: top; }
+		51% { transform: scaleY(1); transform-origin: bottom; }
+		100% { transform: scaleY(0); transform-origin: bottom; }
+	}
+
+	/* ---------- Intro ---------- */
+	.intro-grid {
+		display: grid;
+		gap: 30px;
+	}
+	@media (min-width: 900px) {
+		.intro-grid {
+			grid-template-columns: 0.3fr 1fr;
+		}
+	}
+	.intro-statement {
+		max-width: 18ch;
+	}
+	.intro-lead {
+		margin: 36px 0 30px;
+	}
+	.stats,
+	.pillars {
+		display: grid;
+		gap: 1px;
+		margin-top: clamp(70px, 10vw, 130px);
+		background: var(--line);
+		border: 1px solid var(--line);
+	}
+	@media (min-width: 760px) {
+		.stats,
+		.pillars {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+	.stat,
+	.pillar {
+		display: grid;
+		gap: 14px;
+		align-content: start;
+		padding: clamp(28px, 4vw, 52px);
+		background: var(--ink);
+		transition: background 0.6s;
+	}
+	.pillar:hover,
+	.stat:hover {
+		background: var(--ink-2);
+	}
+	.stat-label,
+	.pillar-num {
+		font-size: 0.7rem;
+		letter-spacing: 0.28em;
+		text-transform: uppercase;
+		color: var(--gold);
+	}
+	.pillar p {
+		margin: 0;
+		color: var(--text-soft);
+	}
+
+	/* ---------- Servicios horizontales ---------- */
+	.services-h {
+		position: relative;
+		padding-block: clamp(70px, 9vw, 120px);
+		overflow: hidden;
+		background: linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 50%, var(--ink) 100%);
+	}
+	.services-h-head {
+		display: grid;
+		gap: 28px;
+		margin-bottom: clamp(40px, 6vw, 70px);
+	}
+	@media (min-width: 900px) {
+		.services-h-head {
+			grid-template-columns: 1.2fr 0.8fr;
+			align-items: end;
+		}
+	}
+	.services-h-side {
+		display: grid;
+		gap: 18px;
+		justify-items: start;
+	}
+	.services-h-side p {
+		margin: 0;
+	}
+	.services-h-track {
+		display: flex;
+		gap: clamp(18px, 2vw, 28px);
+		padding-inline: var(--gutter);
+		overflow-x: auto;
+		scroll-snap-type: x mandatory;
+		scrollbar-width: none;
+	}
+	.services-h-track::-webkit-scrollbar {
+		display: none;
+	}
+	.services-h-item {
+		flex: 0 0 min(82vw, 400px);
+		scroll-snap-align: start;
+	}
+	@media (min-width: 1024px) {
+		.services-h {
+			min-height: 100vh;
+			display: flex;
+			flex-direction: column;
+			justify-content: center;
+		}
+		.services-h-track {
+			overflow: visible;
+			padding-left: max(var(--gutter), calc((100vw - var(--max)) / 2 + var(--gutter)));
+			will-change: transform;
+		}
+		.services-h-item {
+			flex-basis: 380px;
+		}
+	}
+	@media (min-width: 1024px) and (max-height: 860px) {
+		.services-h {
+			padding-block: 40px;
+		}
+		.services-h-head {
+			margin-bottom: 28px;
+		}
+		.services-h-item :global(.svc-media) {
+			aspect-ratio: 16 / 8;
+		}
+		.services-h-item :global(.svc-body) {
+			padding: 20px 24px;
+			gap: 8px;
+		}
+	}
+	.services-h-progress-wrap {
+		margin-top: 40px;
+	}
+	.services-h-progress {
+		height: 1px;
+		background: var(--line);
+	}
+	.services-h-progress span {
+		display: block;
+		height: 100%;
+		background: var(--gold-gradient);
+		transform-origin: left;
+		transform: scaleX(0);
+	}
+	@media (max-width: 1023px) {
+		.services-h-progress-wrap {
+			display: none;
+		}
+	}
+
+	/* ---------- Portafolio ---------- */
+	.work-grid {
+		display: grid;
+		gap: clamp(28px, 4vw, 60px);
+	}
+	@media (min-width: 760px) {
+		.work-grid {
+			grid-template-columns: 1fr 1fr;
+		}
+		.work-item--1,
+		.work-item--3 {
+			margin-top: clamp(60px, 10vw, 160px);
+		}
+	}
+	.cat-grid {
+		display: grid;
+		gap: 20px;
+	}
+	@media (min-width: 760px) {
+		.cat-grid {
+			grid-template-columns: repeat(4, 1fr);
+		}
+		.cat-tile:nth-child(even) {
+			margin-top: 80px;
+		}
+	}
+	.cat-tile {
+		position: relative;
+		display: grid;
+		gap: 16px;
+	}
+	.cat-tile-media {
+		aspect-ratio: 3 / 4;
+		border-radius: var(--radius);
+		overflow: hidden;
+	}
+	.cat-tile-media > div {
+		width: 100%;
+		height: 100%;
+		transition: transform 1.4s var(--ease-lux);
+	}
+	.cat-tile:hover .cat-tile-media > div {
+		transform: scale(1.06);
+	}
+	.cat-tile-num {
+		position: absolute;
+		top: 16px;
+		left: 18px;
+		font-size: 0.7rem;
+		letter-spacing: 0.24em;
+		color: var(--gold-light);
+	}
+
+	/* ---------- Proceso ---------- */
+	.process {
+		overflow: hidden;
+	}
+	.process-orb {
+		width: 50vw;
+		height: 50vw;
+		right: -20vw;
+		top: 10%;
+		opacity: 0.3;
+	}
+	.process-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: clamp(40px, 5vw, 60px);
+	}
+	@media (min-width: 760px) {
+		.process-list {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+	@media (min-width: 1100px) {
+		.process-list {
+			grid-template-columns: repeat(4, 1fr);
+		}
+	}
+	.process-step {
+		display: grid;
+		gap: 18px;
+	}
+	.process-num {
+		color: transparent;
+		-webkit-text-stroke: 1px var(--gold);
+		font-style: italic;
+	}
+	.process-step p {
+		margin: 0;
+		color: var(--text-soft);
+	}
+</style>
