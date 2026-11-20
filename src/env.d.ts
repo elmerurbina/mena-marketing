@@ -1,14 +1,5 @@
 /// <reference types="astro/client" />
-
-interface ImportMetaEnv {
-	readonly PUBLIC_SUPABASE_URL: string;
-	readonly PUBLIC_SUPABASE_ANON_KEY: string;
-	readonly SITE_URL?: string;
-}
-
-interface ImportMeta {
-	readonly env: ImportMetaEnv;
-}
+// Las variables de entorno se declaran en astro.config.mjs (env.schema) y se importan desde 'astro:env/server'.
 
 declare namespace App {
 	interface Locals {

@@ -65,7 +65,7 @@ if (Astro.request.method === 'POST') {
 			<h1>Panel <em>administrativo</em></h1>
 			<p class="muted">Acceso exclusivo para personal autorizado de MENA Marketing.</p>
 
-			{!isSupabaseConfigured && <div class="flash flash-info">Configura <code>PUBLIC_SUPABASE_URL</code> y <code>PUBLIC_SUPABASE_ANON_KEY</code> en el archivo <code>.env</code>.</div>}
+			{!isSupabaseConfigured && <div class="flash flash-info">Configura <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> (archivo <code>.env</code> o variables de entorno de Vercel).</div>}
 			{error && <div class="flash flash-err" role="alert">{error}</div>}
 
 			<form method="post" class="form" autocomplete="on">

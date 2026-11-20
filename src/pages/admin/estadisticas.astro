@@ -1,0 +1,883 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+
+type Totals = {
+	views: number;
+	visitors: number;
+	new_visitors: number;
+	sessions: number;
+	bounce_rate: number;
+	pages_per_session: number;
+	avg_session_ms: number;
+	avg_time_on_page_ms: number;
+};
+type Row = { label: string; views: number; visitors: number; avg_ms?: number };
+type Report = {
+	period: string;
+	bucket: string;
+	tz: string;
+	totals: Totals;
+	previous: Totals;
+	series: { t: string; views: number; visitors: number }[];
+	pages: Row[];
+	referrers: Row[];
+	campaigns: Row[];
+	countries: Row[];
+	cities: Row[];
+	devices: Row[];
+	browsers: Row[];
+	os: Row[];
+	hours: { h: number; views: number }[];
+};
+type Overview = {
+	today: Totals;
+	week: Totals;
+	month: Totals;
+	year: Totals;
+	all: { views: number; visitors: number };
+	active_now: number;
+};
+
+const sb = Astro.locals.supabase!;
+const periods = [
+	{ key: 'hoy', label: 'Hoy', hint: 'por hora' },
+	{ key: 'dia', label: 'Día', hint: 'últimos 30 días' },
+	{ key: 'semana', label: 'Semana', hint: 'últimas 12 semanas' },
+	{ key: 'mes', label: 'Mes', hint: 'últimos 12 meses' },
+	{ key: 'anio', label: 'Año', hint: 'últimos 5 años' },
+];
+const period = periods.some((p) => p.key === Astro.url.searchParams.get('periodo')) ? Astro.url.searchParams.get('periodo')! : 'dia';
+const tzCookie = Astro.cookies.get('mena_tz')?.value ?? 'UTC';
+const tz = /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+){0,2}$/.test(tzCookie) ? tzCookie : 'UTC';
+
+const [reportRes, overviewRes] = await Promise.all([
+	sb.rpc('analytics_report', { p_period: period, p_tz: tz }),
+	sb.rpc('analytics_overview', { p_tz: tz }),
+]);
+const report = reportRes.data as Report | null;
+const overview = overviewRes.data as Overview | null;
+const setupError = reportRes.error || overviewRes.error;
+
+const nf = new Intl.NumberFormat('es');
+const fmt = (n: number | null | undefined) => nf.format(Number(n ?? 0));
+const dur = (ms: number) => {
+	const s = Math.round((ms || 0) / 1000);
+	if (s < 60) return `${s} s`;
+	const m = Math.floor(s / 60);
+	return m < 60 ? `${m} min ${s % 60} s` : `${Math.floor(m / 60)} h ${m % 60} min`;
+};
+const delta = (cur: number, prev: number) => {
+	if (!prev && !cur) return null;
+	if (!prev) return { pct: null as number | null, up: true };
+	const pct = ((cur - prev) / prev) * 100;
+	return { pct: Math.round(pct * 10) / 10, up: pct >= 0 };
+};
+
+let regionNames: Intl.DisplayNames | null = null;
+try {
+	regionNames = new Intl.DisplayNames(['es'], { type: 'region' });
+} catch {}
+const flag = (cc: string) => (/^[A-Z]{2}$/.test(cc) ? String.fromCodePoint(...[...cc].map((c) => 127397 + c.charCodeAt(0))) : '🌐');
+const countryName = (cc: string) => {
+	if (!/^[A-Z]{2}$/.test(cc)) return 'Desconocido';
+	try {
+		return regionNames?.of(cc) ?? cc;
+	} catch {
+		return cc;
+	}
+};
+
+const t = report?.totals;
+const p = report?.previous;
+const kpis = t && p
+	? [
+			{ label: 'Visitas', sub: 'páginas vistas', value: fmt(t.views), d: delta(t.views, p.views) },
+			{ label: 'Visitantes únicos', sub: 'personas distintas', value: fmt(t.visitors), d: delta(t.visitors, p.visitors) },
+			{ label: 'Visitantes nuevos', sub: 'primera visita', value: fmt(t.new_visitors), d: delta(t.new_visitors, p.new_visitors) },
+			{ label: 'Sesiones', sub: 'visitas al sitio', value: fmt(t.sessions), d: delta(t.sessions, p.sessions) },
+			{ label: 'Páginas por sesión', sub: 'promedio', value: String(t.pages_per_session).replace('.', ','), d: delta(t.pages_per_session, p.pages_per_session) },
+			{ label: 'Duración de sesión', sub: 'promedio', value: dur(t.avg_session_ms), d: delta(t.avg_session_ms, p.avg_session_ms) },
+			{ label: 'Tiempo en página', sub: 'promedio', value: dur(t.avg_time_on_page_ms), d: delta(t.avg_time_on_page_ms, p.avg_time_on_page_ms) },
+			{ label: 'Tasa de rebote', sub: 'sesiones de una sola página', value: `${String(t.bounce_rate).replace('.', ',')} %`, d: delta(t.bounce_rate, p.bounce_rate), inverse: true },
+		]
+	: [];
+
+const quick = overview
+	? [
+			{ label: 'Hoy', v: overview.today },
+			{ label: 'Esta semana', v: overview.week },
+			{ label: 'Este mes', v: overview.month },
+			{ label: 'Este año', v: overview.year },
+		]
+	: [];
+
+const breakdowns = report
+	? [
+			{ title: 'Fuentes de tráfico', rows: report.referrers, metric: 'views' as const, unit: 'visitas', empty: 'Sin datos de procedencia.' },
+			{ title: 'Países', rows: report.countries.map((r) => ({ ...r, label: `${flag(r.label)}  ${countryName(r.label)}` })), metric: 'visitors' as const, unit: 'visitantes', empty: 'Sin datos de ubicación (disponible en Vercel).' },
+			{ title: 'Ciudades', rows: report.cities, metric: 'visitors' as const, unit: 'visitantes', empty: 'Sin datos de ciudad (disponible en Vercel).' },
+			{ title: 'Dispositivos', rows: report.devices, metric: 'visitors' as const, unit: 'visitantes', empty: 'Sin datos.' },
+			{ title: 'Navegadores', rows: report.browsers, metric: 'visitors' as const, unit: 'visitantes', empty: 'Sin datos.' },
+			{ title: 'Sistemas operativos', rows: report.os, metric: 'visitors' as const, unit: 'visitantes', empty: 'Sin datos.' },
+			{ title: 'Campañas (UTM)', rows: report.campaigns, metric: 'views' as const, unit: 'visitas', empty: 'Agrega ?utm_source=instagram a tus enlaces para medir campañas.' },
+		]
+	: [];
+const maxHour = Math.max(1, ...(report?.hours ?? []).map((h) => h.views));
+const currentHint = periods.find((x) => x.key === period)?.hint;
+---
+
+<AdminLayout title="Estadísticas">
+	<div class="page-head">
+		<div>
+			<p class="crumbs"><a href="/admin">Panel</a> / Estadísticas</p>
+			<h1>Estadísticas del sitio</h1>
+			<p>Visitas y comportamiento de los visitantes · zona horaria {report?.tz ?? tz}</p>
+		</div>
+		{
+			overview && (
+				<div class="live" title="Visitantes que abrieron una página en los últimos 5 minutos">
+					<span class="live-dot" aria-hidden="true" />
+					<strong>{fmt(overview.active_now)}</strong> en el sitio ahora
+				</div>
+			)
+		}
+	</div>
+
+	{
+		setupError && (
+			<div class="flash flash-info">
+				Las estadísticas aún no están activadas. Ejecuta <code>supabase/analytics.sql</code> en el SQL Editor de Supabase.
+				<span class="muted"> ({setupError.message})</span>
+			</div>
+		)
+	}
+
+	{
+		overview && (
+			<div class="quick">
+				{quick.map((q) => (
+					<div class="quick-tile">
+						<span class="quick-label">{q.label}</span>
+						<strong>{fmt(q.v.views)}</strong>
+						<span class="quick-sub">visitas · {fmt(q.v.visitors)} visitantes</span>
+					</div>
+				))}
+				<div class="quick-tile quick-tile--all">
+					<span class="quick-label">Histórico</span>
+					<strong>{fmt(overview.all.views)}</strong>
+					<span class="quick-sub">visitas · {fmt(overview.all.visitors)} visitantes</span>
+				</div>
+			</div>
+		)
+	}
+
+	<nav class="periods" aria-label="Agrupar por">
+		{
+			periods.map((x) => (
+				<a href={`?periodo=${x.key}`} class:list={['period', { active: x.key === period }]} aria-current={x.key === period ? 'page' : undefined}>
+					{x.label}
+				</a>
+			))
+		}
+		<span class="periods-hint">{currentHint} · comparado con el periodo anterior</span>
+	</nav>
+
+	{
+		report && (
+			<>
+				<div class="kpis">
+					{kpis.map((k) => {
+						const good = k.d ? (k.inverse ? !k.d.up : k.d.up) : true;
+						return (
+							<div class="kpi">
+								<span class="kpi-label">{k.label}</span>
+								<strong class="kpi-value">{k.value}</strong>
+								<span class="kpi-foot">
+									{k.d ? (
+										<span class:list={['kpi-delta', good ? 'is-good' : 'is-bad']}>
+											{k.d.up ? '▲' : '▼'} {k.d.pct === null ? 'nuevo' : `${Math.abs(k.d.pct).toString().replace('.', ',')} %`}
+										</span>
+									) : (
+										<span class="kpi-delta">—</span>
+									)}
+									<span class="muted">{k.sub}</span>
+								</span>
+							</div>
+						);
+					})}
+				</div>
+
+				<section class="card chart-card">
+					<div class="chart-head">
+						<h2 class="card-title" style="margin:0">Visitas y visitantes</h2>
+						<div class="legend" aria-hidden="true">
+							<span><i class="key key-bar" />Visitas</span>
+							<span><i class="key key-line" />Visitantes únicos</span>
+						</div>
+					</div>
+					<div class="chart" data-chart data-bucket={report.bucket}>
+						<div class="chart-tip" data-tip hidden />
+					</div>
+					<script type="application/json" data-chart-data set:html={JSON.stringify(report.series)} />
+					<details class="table-view">
+						<summary>Ver como tabla</summary>
+						<div class="table-wrap">
+							<table>
+								<thead><tr><th>Periodo</th><th>Visitas</th><th>Visitantes únicos</th></tr></thead>
+								<tbody data-chart-table />
+							</table>
+						</div>
+					</details>
+				</section>
+
+				<div class="grid-2">
+					<section class="card">
+						<h2 class="card-title">Páginas más vistas</h2>
+						{report.pages.length ? (
+							<div class="table-wrap">
+								<table class="pages-table">
+									<thead><tr><th>Página</th><th class="num">Visitas</th><th class="num">Visitantes</th><th class="num">Tiempo medio</th></tr></thead>
+									<tbody>
+										{report.pages.map((r) => (
+											<tr>
+												<td><a href={r.label} target="_blank" rel="noopener" class="path">{r.label}</a></td>
+												<td class="num">{fmt(r.views)}</td>
+												<td class="num">{fmt(r.visitors)}</td>
+												<td class="num">{dur(r.avg_ms ?? 0)}</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						) : (
+							<p class="empty">Aún no hay visitas en este periodo.</p>
+						)}
+					</section>
+
+					<section class="card">
+						<h2 class="card-title">Horas de mayor actividad</h2>
+						<div class="hours" role="img" aria-label="Visitas por hora del día">
+							{report.hours.map((h) => (
+								<div class="hour" tabindex="0" title={`${String(h.h).padStart(2, '0')}:00 — ${fmt(h.views)} visitas`}>
+									<span class="hour-bar" style={`height:${Math.max(2, (h.views / maxHour) * 100)}%`} />
+									<span class="hour-tip">{fmt(h.views)}</span>
+								</div>
+							))}
+						</div>
+						<div class="hours-axis" aria-hidden="true"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div>
+					</section>
+				</div>
+
+				<div class="grid-3">
+					{breakdowns.map((b) => {
+						const max = Math.max(1, ...b.rows.map((r) => r[b.metric]));
+						const total = b.rows.reduce((a, r) => a + r[b.metric], 0) || 1;
+						return (
+							<section class="card">
+								<h2 class="card-title">{b.title}</h2>
+								{b.rows.length ? (
+									<ul class="bars">
+										{b.rows.map((r) => (
+											<li title={`${r.label}: ${fmt(r.views)} visitas · ${fmt(r.visitors)} visitantes`}>
+												<span class="bar-fill" style={`width:${(r[b.metric] / max) * 100}%`} />
+												<span class="bar-label">{r.label}</span>
+												<span class="bar-value">
+													{fmt(r[b.metric])}
+													<small>{Math.round((r[b.metric] / total) * 100)} %</small>
+												</span>
+											</li>
+										))}
+									</ul>
+								) : (
+									<p class="empty small">{b.empty}</p>
+								)}
+								{b.rows.length > 0 && <p class="unit">Ordenado por {b.unit}</p>}
+							</section>
+						);
+					})}
+				</div>
+			</>
+		)
+	}
+</AdminLayout>
+
+<script>
+	const fmt = new Intl.NumberFormat('es');
+	const host = document.querySelector<HTMLElement>('[data-chart]');
+	const dataEl = document.querySelector<HTMLScriptElement>('[data-chart-data]');
+
+	type Point = { t: string; views: number; visitors: number };
+
+	function label(t: string, bucket: string, long = false): string {
+		const [d, time] = t.split('T');
+		const [y, m, day] = d.split('-').map(Number);
+		const date = new Date(y, m - 1, day);
+		const month = date.toLocaleDateString('es', { month: 'short' }).replace('.', '');
+		if (bucket === 'hour') return `${time}`;
+		if (bucket === 'day') return long ? date.toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : `${day} ${month}`;
+		if (bucket === 'week') return long ? `Semana del ${day} ${month} ${y}` : `${day} ${month}`;
+		if (bucket === 'month') return long ? date.toLocaleDateString('es', { month: 'long', year: 'numeric' }) : `${month} ${String(y).slice(2)}`;
+		return String(y);
+	}
+
+	function niceMax(v: number) {
+		if (v <= 4) return 4;
+		const p = Math.pow(10, Math.floor(Math.log10(v)));
+		const n = v / p;
+		return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+	}
+
+	if (host && dataEl) {
+		const data = JSON.parse(dataEl.textContent || '[]') as Point[];
+		const bucket = host.dataset.bucket || 'day';
+		const tip = host.querySelector<HTMLElement>('[data-tip]')!;
+		const NS = 'http://www.w3.org/2000/svg';
+
+		// Tabla accesible
+		const tbody = document.querySelector('[data-chart-table]');
+		data.forEach((p) => {
+			const tr = document.createElement('tr');
+			[label(p.t, bucket, true), fmt.format(p.views), fmt.format(p.visitors)].forEach((v) => {
+				const td = document.createElement('td');
+				td.textContent = v;
+				tr.appendChild(td);
+			});
+			tbody?.appendChild(tr);
+		});
+
+		const el = (tag: string, attrs: Record<string, string | number>) => {
+			const n = document.createElementNS(NS, tag);
+			for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+			return n;
+		};
+
+		function draw() {
+			host!.querySelector('svg')?.remove();
+			const W = host!.clientWidth;
+			const H = 300;
+			const m = { t: 16, r: 12, b: 30, l: 44 };
+			const iw = W - m.l - m.r;
+			const ih = H - m.t - m.b;
+			const max = niceMax(Math.max(1, ...data.map((d) => Math.max(d.views, d.visitors))));
+			const n = Math.max(1, data.length);
+			const band = iw / n;
+			const gap = Math.max(2, Math.min(band * 0.35, 14));
+			const bw = Math.max(1, band - gap);
+			const y = (v: number) => m.t + ih - (v / max) * ih;
+			const svg = el('svg', { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Visitas y visitantes únicos por periodo' });
+
+			// Rejilla y eje Y
+			for (let i = 0; i <= 4; i++) {
+				const v = (max / 4) * i;
+				const yy = y(v);
+				svg.appendChild(el('line', { x1: m.l, x2: W - m.r, y1: yy, y2: yy, class: i === 0 ? 'axis' : 'grid' }));
+				const tx = el('text', { x: m.l - 8, y: yy + 4, 'text-anchor': 'end', class: 'tick' });
+				tx.textContent = fmt.format(v);
+				svg.appendChild(tx);
+			}
+
+			// Barras (visitas) con extremo redondeado de 4px anclado a la base
+			data.forEach((d, i) => {
+				if (!d.views) return;
+				const x = m.l + i * band + gap / 2;
+				const h = Math.max(1, (d.views / max) * ih);
+				const r = Math.min(4, bw / 2, h);
+				const top = m.t + ih - h;
+				const path = `M${x},${m.t + ih} V${top + r} Q${x},${top} ${x + r},${top} H${x + bw - r} Q${x + bw},${top} ${x + bw},${top + r} V${m.t + ih} Z`;
+				svg.appendChild(el('path', { d: path, class: 'bar', 'data-i': i }));
+			});
+
+			// Línea (visitantes)
+			const pts = data.map((d, i) => [m.l + i * band + band / 2, y(d.visitors)]);
+			if (pts.length) {
+				svg.appendChild(el('path', { d: pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' '), class: 'line' }));
+				if (pts.length <= 40) pts.forEach((p) => svg.appendChild(el('circle', { cx: p[0], cy: p[1], r: 4, class: 'dot' })));
+			}
+
+			// Etiquetas del eje X (selectivas)
+			const every = Math.ceil(n / Math.max(1, Math.floor(iw / 64)));
+			data.forEach((d, i) => {
+				if (i % every !== 0 && i !== n - 1) return;
+				const tx = el('text', { x: m.l + i * band + band / 2, y: H - 8, 'text-anchor': 'middle', class: 'tick' });
+				tx.textContent = label(d.t, bucket);
+				svg.appendChild(tx);
+			});
+
+			// Capa de interacción: cruz vertical + tooltip
+			const cross = el('line', { y1: m.t, y2: m.t + ih, class: 'cross', visibility: 'hidden' });
+			svg.appendChild(cross);
+			const hit = el('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent', tabindex: 0 });
+			svg.appendChild(hit);
+
+			const show = (i: number) => {
+				const d = data[i];
+				if (!d) return;
+				const cx = m.l + i * band + band / 2;
+				cross.setAttribute('x1', String(cx));
+				cross.setAttribute('x2', String(cx));
+				cross.setAttribute('visibility', 'visible');
+				svg.querySelectorAll('.bar').forEach((b) => b.classList.toggle('is-hover', b.getAttribute('data-i') === String(i)));
+				tip.replaceChildren();
+				const h = document.createElement('div');
+				h.className = 'tip-title';
+				h.textContent = label(d.t, bucket, true);
+				tip.appendChild(h);
+				[
+					['key-bar', d.views, 'Visitas'],
+					['key-line', d.visitors, 'Visitantes únicos'],
+				].forEach(([k, v, name]) => {
+					const row = document.createElement('div');
+					row.className = 'tip-row';
+					const key = document.createElement('i');
+					key.className = `key ${k}`;
+					const strong = document.createElement('strong');
+					strong.textContent = fmt.format(Number(v));
+					const span = document.createElement('span');
+					span.textContent = String(name);
+					row.append(key, strong, span);
+					tip.appendChild(row);
+				});
+				tip.hidden = false;
+				const tw = tip.offsetWidth;
+				tip.style.left = `${Math.min(Math.max(cx - tw / 2, 0), W - tw)}px`;
+				tip.style.top = `${m.t}px`;
+				current = i;
+			};
+			const hide = () => {
+				tip.hidden = true;
+				cross.setAttribute('visibility', 'hidden');
+				svg.querySelectorAll('.bar.is-hover').forEach((b) => b.classList.remove('is-hover'));
+			};
+			let current = n - 1;
+			hit.addEventListener('pointermove', (e) => {
+				const rect = svg.getBoundingClientRect();
+				const i = Math.floor(((e as PointerEvent).clientX - rect.left - m.l) / band);
+				show(Math.min(n - 1, Math.max(0, i)));
+			});
+			hit.addEventListener('pointerleave', hide);
+			hit.addEventListener('focus', () => show(current));
+			hit.addEventListener('blur', hide);
+			hit.addEventListener('keydown', (e) => {
+				const k = (e as KeyboardEvent).key;
+				if (k === 'ArrowRight') show(Math.min(n - 1, current + 1));
+				if (k === 'ArrowLeft') show(Math.max(0, current - 1));
+			});
+
+			host!.insertBefore(svg, tip);
+		}
+
+		draw();
+		let raf = 0;
+		new ResizeObserver(() => {
+			cancelAnimationFrame(raf);
+			raf = requestAnimationFrame(draw);
+		}).observe(host);
+	}
+</script>
+
+<style>
+	/* Paleta de gráficos validada (oscuro, superficie #15121c): visitas = oro, visitantes = púrpura */
+	.chart-card,
+	.kpis,
+	.quick {
+		--series-1: #a8862a;
+		--series-2: #9b6bff;
+	}
+	.live {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		padding: 10px 16px;
+		border: 1px solid var(--line-strong);
+		border-radius: 999px;
+		font-size: 0.88rem;
+		color: var(--text-soft);
+	}
+	.live strong {
+		color: var(--text);
+		font-size: 1.05rem;
+	}
+	.live-dot {
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background: var(--ok);
+		box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.6);
+		animation: live 2s infinite;
+	}
+	@keyframes live {
+		70% { box-shadow: 0 0 0 10px rgba(110, 231, 168, 0); }
+		100% { box-shadow: 0 0 0 0 rgba(110, 231, 168, 0); }
+	}
+	.quick {
+		display: grid;
+		gap: 14px;
+		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+		margin-bottom: 26px;
+	}
+	.quick-tile {
+		display: grid;
+		gap: 4px;
+		padding: 18px 20px;
+		border-radius: var(--radius);
+		border: 1px solid var(--line);
+		background: var(--surface);
+	}
+	.quick-tile--all {
+		background: linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(212, 175, 55, 0.06));
+	}
+	.quick-label {
+		font-size: 0.68rem;
+		letter-spacing: 0.2em;
+		text-transform: uppercase;
+		color: var(--gold);
+	}
+	.quick-tile strong {
+		font-family: var(--font-display);
+		font-size: 2.3rem;
+		font-weight: 500;
+		line-height: 1.05;
+	}
+	.quick-sub {
+		font-size: 0.8rem;
+		color: var(--muted);
+	}
+	.periods {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		margin-bottom: 18px;
+	}
+	.period {
+		padding: 9px 18px;
+		border-radius: 999px;
+		border: 1px solid var(--line);
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--text-soft);
+		transition: border-color 0.3s, background 0.3s;
+	}
+	.period:hover {
+		border-color: var(--gold);
+	}
+	.period.active {
+		background: var(--gold-gradient);
+		background-size: 200% 100%;
+		color: var(--ink);
+		border-color: transparent;
+	}
+	.periods-hint {
+		margin-left: 8px;
+		font-size: 0.82rem;
+		color: var(--muted);
+	}
+	.kpis {
+		display: grid;
+		gap: 14px;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		margin-bottom: 22px;
+	}
+	.kpi {
+		display: grid;
+		gap: 6px;
+		padding: 18px 20px;
+		border-radius: var(--radius);
+		border: 1px solid var(--line);
+		background: linear-gradient(180deg, var(--surface), var(--ink-2));
+	}
+	.kpi-label {
+		font-size: 0.75rem;
+		color: var(--text-soft);
+		font-weight: 600;
+	}
+	.kpi-value {
+		font-family: var(--font-display);
+		font-size: 2rem;
+		font-weight: 500;
+		line-height: 1.1;
+	}
+	.kpi-foot {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		align-items: center;
+		font-size: 0.78rem;
+	}
+	.kpi-delta {
+		font-weight: 700;
+		color: var(--text-soft);
+	}
+	.kpi-delta.is-good {
+		color: var(--ok);
+	}
+	.kpi-delta.is-bad {
+		color: var(--danger);
+	}
+	.chart-head {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: space-between;
+		align-items: center;
+		gap: 12px;
+		margin-bottom: 14px;
+	}
+	.legend {
+		display: flex;
+		gap: 18px;
+		font-size: 0.82rem;
+		color: var(--text-soft);
+	}
+	.legend span {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.key {
+		display: inline-block;
+		flex-shrink: 0;
+	}
+	.key-bar {
+		width: 12px;
+		height: 12px;
+		border-radius: 3px;
+		background: var(--series-1);
+	}
+	.key-line {
+		width: 16px;
+		height: 2px;
+		border-radius: 2px;
+		background: var(--series-2);
+	}
+	.chart {
+		position: relative;
+		width: 100%;
+		min-height: 300px;
+	}
+	.chart :global(svg) {
+		display: block;
+		overflow: visible;
+	}
+	.chart :global(.grid) {
+		stroke: rgba(255, 255, 255, 0.06);
+	}
+	.chart :global(.axis) {
+		stroke: rgba(255, 255, 255, 0.2);
+	}
+	.chart :global(.tick) {
+		fill: var(--muted);
+		font-size: 11px;
+		font-family: var(--font-sans);
+	}
+	.chart :global(.bar) {
+		fill: var(--series-1);
+		transition: opacity 0.2s;
+	}
+	.chart :global(.bar.is-hover) {
+		fill: #c39c33;
+	}
+	.chart :global(.line) {
+		fill: none;
+		stroke: var(--series-2);
+		stroke-width: 2;
+		stroke-linejoin: round;
+		stroke-linecap: round;
+	}
+	.chart :global(.dot) {
+		fill: var(--series-2);
+		stroke: var(--surface);
+		stroke-width: 2;
+	}
+	.chart :global(.cross) {
+		stroke: rgba(255, 255, 255, 0.35);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+		pointer-events: none;
+	}
+	.chart-tip {
+		position: absolute;
+		z-index: 2;
+		min-width: 170px;
+		padding: 10px 12px;
+		border-radius: 8px;
+		background: var(--surface-3);
+		border: 1px solid var(--line-strong);
+		box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+		pointer-events: none;
+		font-size: 0.82rem;
+	}
+	.chart-tip :global(.tip-title) {
+		color: var(--muted);
+		margin-bottom: 6px;
+		font-size: 0.76rem;
+	}
+	.chart-tip :global(.tip-row) {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.chart-tip :global(.tip-row strong) {
+		color: var(--text);
+		font-size: 0.95rem;
+	}
+	.chart-tip :global(.tip-row span) {
+		color: var(--text-soft);
+	}
+	.chart-tip :global(.key-bar) {
+		width: 14px;
+		height: 3px;
+		border-radius: 2px;
+	}
+	.table-view {
+		margin-top: 14px;
+	}
+	.table-view summary {
+		cursor: pointer;
+		color: var(--gold);
+		font-size: 0.85rem;
+	}
+	.table-view table {
+		margin-top: 10px;
+	}
+	.grid-2,
+	.grid-3 {
+		display: grid;
+		gap: 22px;
+		margin-top: 22px;
+	}
+	.grid-2 .card + .card,
+	.grid-3 .card + .card {
+		margin-top: 0;
+	}
+	@media (min-width: 1100px) {
+		.grid-2 {
+			grid-template-columns: 1.5fr 1fr;
+		}
+	}
+	@media (min-width: 900px) {
+		.grid-3 {
+			grid-template-columns: repeat(2, 1fr);
+		}
+	}
+	@media (min-width: 1300px) {
+		.grid-3 {
+			grid-template-columns: repeat(3, 1fr);
+		}
+	}
+	.num {
+		text-align: right;
+		white-space: nowrap;
+	}
+	.path {
+		color: var(--text);
+		word-break: break-all;
+	}
+	.path:hover {
+		color: var(--gold-light);
+	}
+	.bars {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: grid;
+		gap: 4px;
+	}
+	.bars li {
+		position: relative;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 12px;
+		padding: 8px 10px;
+		border-radius: 6px;
+		overflow: hidden;
+		font-size: 0.88rem;
+	}
+	.bars li:hover {
+		background: rgba(255, 255, 255, 0.03);
+	}
+	.bar-fill {
+		position: absolute;
+		inset: 0 auto 0 0;
+		background: rgba(168, 134, 42, 0.28);
+		border-radius: 0 4px 4px 0;
+		transition: width 0.8s var(--ease);
+	}
+	.bar-label,
+	.bar-value {
+		position: relative;
+	}
+	.bar-label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.bar-value {
+		font-weight: 600;
+		white-space: nowrap;
+	}
+	.bar-value small {
+		margin-left: 8px;
+		font-weight: 400;
+		color: var(--muted);
+	}
+	.unit {
+		margin: 12px 0 0;
+		font-size: 0.75rem;
+		color: var(--muted);
+	}
+	.empty.small {
+		padding: 20px 0;
+		font-size: 0.88rem;
+	}
+	.hours {
+		display: grid;
+		grid-template-columns: repeat(24, 1fr);
+		gap: 3px;
+		align-items: end;
+		height: 180px;
+	}
+	.hour {
+		position: relative;
+		height: 100%;
+		display: flex;
+		align-items: flex-end;
+		outline: none;
+	}
+	.hour-bar {
+		width: 100%;
+		border-radius: 3px 3px 0 0;
+		background: var(--series-1, #a8862a);
+		opacity: 0.85;
+		transition: opacity 0.2s;
+	}
+	.hour:hover .hour-bar,
+	.hour:focus .hour-bar {
+		opacity: 1;
+		background: #c39c33;
+	}
+	.hour-tip {
+		position: absolute;
+		bottom: calc(100% + 4px);
+		left: 50%;
+		translate: -50% 0;
+		padding: 2px 6px;
+		border-radius: 4px;
+		background: var(--surface-3);
+		font-size: 0.72rem;
+		opacity: 0;
+		pointer-events: none;
+		white-space: nowrap;
+	}
+	.hour:hover .hour-tip,
+	.hour:focus .hour-tip {
+		opacity: 1;
+	}
+	.hours-axis {
+		display: flex;
+		justify-content: space-between;
+		margin-top: 8px;
+		font-size: 0.72rem;
+		color: var(--muted);
+	}
+</style>

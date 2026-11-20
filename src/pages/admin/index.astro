@@ -26,6 +26,9 @@ if (isAdmin) {
 	const { data } = await sb.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(6);
 	recent = (data ?? []) as ContactRequest[];
 }
+const tzCookie = Astro.cookies.get('mena_tz')?.value ?? 'UTC';
+const { data: ov } = await sb.rpc('analytics_overview', { p_tz: /^[A-Za-z_]+(\/[A-Za-z0-9_+-]+){0,2}$/.test(tzCookie) ? tzCookie : 'UTC' });
+const visits = ov as { today: { views: number; visitors: number }; month: { views: number; visitors: number }; active_now: number } | null;
 const hour = new Date().getHours();
 const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
 ---
@@ -41,6 +44,8 @@ const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Bue
 	</div>
 
 	<div class="stats">
+		{visits && (<a href="/admin/estadisticas?periodo=hoy" class="stat"><span>Visitas hoy</span><strong>{visits.today.views}</strong><span>{visits.today.visitors} visitantes · {visits.active_now} ahora</span></a>)}
+		{visits && (<a href="/admin/estadisticas?periodo=mes" class="stat"><span>Visitas este mes</span><strong>{visits.month.views}</strong><span>{visits.month.visitors} visitantes</span></a>)}
 		{isAdmin && (<a href="/admin/solicitudes?estado=nueva" class="stat"><span>Solicitudes nuevas</span><strong>{newRequests}</strong></a>)}
 		<a href="/admin/servicios" class="stat"><span>Servicios activos</span><strong>{services}</strong></a>
 		<a href="/admin/portafolio" class="stat"><span>Proyectos publicados</span><strong>{projects}</strong></a>

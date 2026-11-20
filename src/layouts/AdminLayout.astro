@@ -21,7 +21,10 @@ if (isAdmin && supabase) {
 const groups = [
 	{
 		label: 'General',
-		items: [{ href: '/admin', label: 'Resumen', exact: true }],
+		items: [
+			{ href: '/admin', label: 'Resumen', exact: true },
+			{ href: '/admin/estadisticas', label: 'Estadísticas' },
+		],
 	},
 	...(isAdmin
 		? [{ label: 'Clientes', items: [{ href: '/admin/solicitudes', label: 'Solicitudes', badge: newCount }] }]
@@ -105,6 +108,19 @@ const active = (href: string, exact?: boolean) => (exact ? path === href : path 
 			</main>
 		</div>
 
+		<script is:inline>
+			// Zona horaria del navegador para agrupar las estadísticas por día local
+			(function () {
+				try {
+					var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+					var cur = (document.cookie.match(/(?:^|; )mena_tz=([^;]*)/) || [])[1];
+					if (tz && decodeURIComponent(cur || '') !== tz) {
+						document.cookie = 'mena_tz=' + encodeURIComponent(tz) + '; path=/admin; max-age=31536000; samesite=lax; secure';
+						if (location.pathname.indexOf('/admin/estadisticas') === 0 || location.pathname === '/admin') location.reload();
+					}
+				} catch (e) {}
+			})();
+		</script>
 		<script>
 			// Menú lateral móvil
 			document.querySelector('[data-side-toggle]')?.addEventListener('click', () => document.body.classList.toggle('side-open'));

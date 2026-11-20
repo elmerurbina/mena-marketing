@@ -1,8 +1,9 @@
 import { createServerClient, parseCookieHeader } from '@supabase/ssr';
 import type { AstroCookies } from 'astro';
+import { SUPABASE_ANON_KEY, SUPABASE_URL } from 'astro:env/server';
 
-const url = import.meta.env.PUBLIC_SUPABASE_URL;
-const anonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
+const url = SUPABASE_URL ?? '';
+const anonKey = SUPABASE_ANON_KEY ?? '';
 
 export const isSupabaseConfigured = Boolean(url && anonKey && !url.includes('xxxx'));
 
